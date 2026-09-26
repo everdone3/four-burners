@@ -48,6 +48,15 @@ export function startOfMonth(d: LocalDate): LocalDate {
   return d.slice(0, 8) + '01';
 }
 
+/** First day of the month n months after the month containing d. */
+export function addMonths(d: LocalDate, n: number): LocalDate {
+  const y = Number(d.slice(0, 4));
+  const m = Number(d.slice(5, 7)) - 1 + n;
+  const yy = y + Math.floor(m / 12);
+  const mm = ((m % 12) + 12) % 12;
+  return `${yy}-${String(mm + 1).padStart(2, '0')}-01`;
+}
+
 /** Inclusive list of dates from a to b. */
 export function dateRange(a: LocalDate, b: LocalDate): LocalDate[] {
   const out: LocalDate[] = [];

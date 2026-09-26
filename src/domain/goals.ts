@@ -142,8 +142,11 @@ export function actualFor(goal: Goal, logs: readonly LogEntry[]): number {
       return mine.reduce((s, l) => s + l.value, 0);
     case 'yesno':
       return mine.some((l) => l.value > 0) ? 1 : 0;
-    case 'milestone':
-      return goal.milestones?.filter((m) => m.doneAt).length ?? 0;
+    case 'milestone': {
+      // Counted from logs (not doneAt) so "as of" a past date only sees steps done by then.
+      const done = new Set(mine.map((l) => l.milestoneId).filter(Boolean));
+      return goal.milestones?.filter((m) => done.has(m.id)).length ?? 0;
+    }
   }
 }
 

@@ -8,7 +8,7 @@ A private, offline-first goal tracker built on the Four Burners theory. Installa
 
 - [x] Phase 1: Foundation (domain logic + tests, local data, burners, intents, goals, logging, dashboard, flames, sample data)
 - [x] Phase 2: Depth (why, when/where, goal checks, people, energy, theme, undo, edit history)
-- [ ] Phase 3: Rhythm
+- [x] Phase 3: Rhythm (weekly review, actions, habit streaks, Travel/Crunch, time zones, proration notes, quarter close, archive)
 - [ ] Phase 4: Coach and onboarding
 - [ ] Phase 5: Sync
 - [ ] Phase 6: Security
@@ -45,3 +45,15 @@ Scoring weights and thresholds are all in `src/domain/config.ts`.
 ## Deploy (Vercel)
 
 Import the GitHub repo in Vercel. It detects Vite automatically; no settings needed.
+
+## Rituals
+
+- **Weekly review**: appears on your review day (default Sunday, change it in Settings) and stays for 3 more days. Six steps; everything saves as you go, including half-typed text. If the app closes mid-review, reopening it within an hour lands you back on the same step.
+- **Quarter close**: on the first open of a new quarter, a card offers the highlights reel, then grading (A to F) and carry forward, modify, or drop for each goal, then the next quarter's setup.
+- **Archive**: Settings > Past quarters and highlights. Replay any quarter's reel.
+
+## Dev tools
+
+Settings > Developer:
+- **Load / wipe sample data**: a closed previous quarter (grades, reviews) plus the current quarter so far.
+- **Time travel**: pretend it is next Sunday or the first day of next quarter to preview the review and the quarter close. New logs are dated to the pretend day, so reload sample data afterward.

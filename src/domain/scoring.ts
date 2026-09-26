@@ -1,4 +1,6 @@
 // Dashboard scores and per-burner flame state.
+// Everything is computed "as of" input.today: entries dated after it are ignored, so the same
+// function answers "how did this look last Sunday?" for weekly reviews and the quarter reel.
 import {
   DIM_FADE_DAYS,
   DIM_FLOOR,
@@ -25,6 +27,7 @@ import {
   type Settings,
   type Stamp,
   type Touchpoint,
+  type WeeklyAction,
 } from './types';
 
 export interface DashboardInput {
@@ -36,6 +39,7 @@ export interface DashboardInput {
   people: readonly Person[];
   touchpoints: readonly Touchpoint[];
   crunch: readonly CrunchPeriod[];
+  actions?: readonly WeeklyAction[];
   settings: Settings;
   today: LocalDate;
 }
@@ -77,38 +81,62 @@ export function crunchDateSet(periods: readonly CrunchPeriod[], today: LocalDate
   return out;
 }
 
-/** All check-in stamps: logs, energy ratings, and touchpoints. */
-export function checkInStamps(input: Pick<DashboardInput, 'logs' | 'energy' | 'touchpoints'>): Stamp[] {
-  return [...input.logs, ...input.energy, ...input.touchpoints].filter((s) => !s.deleted);
+/** The crunch period covering `today`, if any. */
+export function activeCrunch(periods: readonly CrunchPeriod[], today: LocalDate): CrunchPeriod | undefined {
+  return periods.find((p) => !p.deleted && p.start <= today && (!p.end || p.end >= today));
+}
+
+/** Drop deleted entries and anything dated after `asOf`. */
+function upTo<T extends { deleted?: boolean; localDate: LocalDate }>(xs: readonly T[], asOf: LocalDate): T[] {
+  return xs.filter((x) => !x.deleted && x.localDate <= asOf);
+}
+
+/** All check-in stamps up to `asOf`: logs, energy ratings, touchpoints, and completed actions. */
+export function checkInStamps(
+  input: Pick<DashboardInput, 'logs' | 'energy' | 'touchpoints' | 'actions'>,
+  asOf = '9999-12-31',
+): Stamp[] {
+  const actionStamps = (input.actions ?? []).filter((a) => !a.deleted && a.done).map((a) => a.done!);
+  return [
+    ...upTo(input.logs, asOf),
+    ...upTo(input.energy, asOf),
+    ...upTo(input.touchpoints, asOf),
+    ...actionStamps.filter((s) => s.localDate <= asOf),
+  ];
+}
+
+/** Dates each burner saw activity (goal logs, touchpoints with its people, completed actions). */
+export function burnerActivity(
+  input: Pick<DashboardInput, 'goals' | 'logs' | 'people' | 'touchpoints' | 'actions'>,
+  asOf: LocalDate,
+): Record<BurnerId, Set<LocalDate>> {
+  const out: Record<BurnerId, Set<LocalDate>> = { family: new Set(), friends: new Set(), health: new Set(), work: new Set() };
+  const goalBurner = new Map(input.goals.filter((g) => !g.deleted).map((g) => [g.id, g.burner]));
+  const personBurner = new Map(input.people.filter((p) => !p.deleted).map((p) => [p.id, p.burner]));
+  for (const l of upTo(input.logs, asOf)) {
+    const b = goalBurner.get(l.goalId);
+    if (b) out[b].add(l.localDate);
+  }
+  for (const t of upTo(input.touchpoints, asOf)) {
+    const b = personBurner.get(t.personId);
+    if (b) out[b].add(t.localDate);
+  }
+  for (const a of input.actions ?? []) {
+    if (!a.deleted && a.done && a.burner && a.done.localDate <= asOf) out[a.burner].add(a.done.localDate);
+  }
+  return out;
 }
 
 export function computeDashboard(input: DashboardInput): Dashboard {
-  const { quarter, goals, logs, people, touchpoints, settings, today } = input;
+  const { quarter, goals, settings, today } = input;
   const crunch = crunchDateSet(input.crunch, today);
-  const stamps = checkInStamps(input);
+  const stamps = checkInStamps(input, today);
   const activeDates = new Set(stamps.map((s) => s.localDate));
   const paused = new Set([...crunch, ...timeZoneExcusedDates(stamps, settings.dayBoundaryHour)]);
 
   const liveGoals = goals.filter((g) => !g.deleted && g.quarterId === quarter.id);
-  const liveLogs = logs.filter((l) => !l.deleted);
-  const personBurner = new Map(people.filter((p) => !p.deleted).map((p) => [p.id, p.burner]));
-  const goalBurner = new Map(liveGoals.map((g) => [g.id, g.burner]));
-
-  const activityByBurner: Record<BurnerId, Set<LocalDate>> = {
-    family: new Set(),
-    friends: new Set(),
-    health: new Set(),
-    work: new Set(),
-  };
-  for (const l of liveLogs) {
-    const b = goalBurner.get(l.goalId);
-    if (b) activityByBurner[b].add(l.localDate);
-  }
-  for (const t of touchpoints) {
-    if (t.deleted) continue;
-    const b = personBurner.get(t.personId);
-    if (b) activityByBurner[b].add(t.localDate);
-  }
+  const liveLogs = upTo(input.logs, today);
+  const activityByBurner = burnerActivity({ ...input, goals: liveGoals }, today);
 
   const last7 = dateRange(addDays(today, -6), today);
   const nonCrunchLast7 = last7.filter((d) => !crunch.has(d)).length;
@@ -135,7 +163,7 @@ export function computeDashboard(input: DashboardInput): Dashboard {
     const recent = needed < 0.5 ? 1 : Math.min(1, activeDaysLast7 / needed);
     const heat = Math.max(PILOT_HEAT, pace === null ? recent : 0.6 * pace + 0.4 * recent);
 
-    const sorted = [...act].filter((d) => d <= today).sort();
+    const sorted = [...act].sort();
     const lastActive = sorted[sorted.length - 1];
     // Silence is measured from the last activity, or from when the burner's first goal began.
     const firstGoalStart = bGoals.map((g) => g.goal.startDate).sort()[0];
@@ -167,7 +195,8 @@ export function computeDashboard(input: DashboardInput): Dashboard {
   }
 
   const firstActive = [...activeDates].sort()[0];
-  const since = firstActive && firstActive > input.quarterStart ? firstActive : input.quarterStart;
+  // Consistency is a rolling window that carries across quarter boundaries (a new quarter is not a reset).
+  const since = firstActive ?? today;
   const streakInput = {
     activeDates,
     today,

@@ -1,6 +1,7 @@
 import { motion } from "motion/react";
 import { useState } from "react";
 import { EnergyRow, ReachOut, ThemeSheet } from "../components/HomeExtras";
+import { ActionsList, CrunchBanner, CrunchChip, CrunchSheet, QuarterCloseCard, ReviewCard, SetupCard } from "../components/Rituals";
 import { BURNERS, BURNER_LABELS, INTENT_LABELS, daysLeftInQuarter, peopleByUrgency, quarterLabel } from "@/domain";
 import type { AppState } from '@/data/hooks';
 import { Flame } from '../components/Flame';
@@ -23,6 +24,7 @@ export function Home({ state }: { state: AppState }) {
   introPlayed = true;
   const d = (s: number) => (intro ? s : 0);
   const [themeOpen, setThemeOpen] = useState(false);
+  const [crunchOpen, setCrunchOpen] = useState(false);
 
   return (
     <div className="px-safe pt-safe relative pb-44">
@@ -62,6 +64,8 @@ export function Home({ state }: { state: AppState }) {
         </button>
       </header>
 
+      {state.pendingClose ? <QuarterCloseCard quarter={state.pendingClose} /> : state.needsSetup ? <SetupCard quarter={quarter} /> : null}
+
       <motion.section
         initial={intro ? { opacity: 0, y: 20, scale: 0.96 } : false}
         animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -75,7 +79,13 @@ export function Home({ state }: { state: AppState }) {
           </div>
         </GlowCard>
       </motion.section>
-      {dashboard.streak.current > 1 && <StreakBadge days={dashboard.streak.current} grace={dashboard.streak.graceUsedThisWeek > 0} />}
+      <div className="mt-4 flex flex-wrap items-center justify-center gap-2.5">
+        {dashboard.streak.current > 1 && <StreakBadge days={dashboard.streak.current} grace={dashboard.streak.graceUsedThisWeek > 0} />}
+        <CrunchChip crunch={state.crunchNow} onOpen={() => setCrunchOpen(true)} />
+      </div>
+      {state.crunchNow && <CrunchBanner crunch={state.crunchNow} onOpen={() => setCrunchOpen(true)} />}
+
+      <ReviewCard today={today} reviewDay={state.settings.reviewDay} reviews={state.data.reviews} />
 
       <section className="mt-6 grid grid-cols-2 gap-3.5">
         {BURNERS.map((b, i) => {
@@ -125,15 +135,12 @@ export function Home({ state }: { state: AppState }) {
         })}
       </section>
 
+      <ActionsList actions={state.data.actions} today={today} />
       <EnergyRow entries={state.data.energy} today={today} />
       <ReachOut statuses={peopleByUrgency(state.data.people, state.data.touchpoints, today)} />
 
-      {dashboard.inCrunchToday && (
-        <p className="mt-4 rounded-2xl border border-line bg-black/60 px-4 py-3 text-[14px] text-dim backdrop-blur">
-          Travel/Crunch mode is on. Expectations are softened and streaks are paused.
-        </p>
-      )}
       <ThemeSheet open={themeOpen} onClose={() => setThemeOpen(false)} quarterId={quarter.id} theme={quarter.theme} />
+      <CrunchSheet open={crunchOpen} onClose={() => setCrunchOpen(false)} crunch={state.crunchNow} today={today} />
     </div>
   );
 }

@@ -108,3 +108,13 @@ describe('fresh start', () => {
     expect(d.consistencyScore).toBe(0);
   });
 });
+
+describe('consistency across quarters', () => {
+  it('does not reset on the first day of a new quarter', () => {
+    const q4: Quarter = { ...quarter({ family: 'high', friends: 'steady', health: 'high', work: 'low' }), id: '2026-Q4' };
+    const logs = dateRange('2026-09-10', '2026-09-30').map((d) => log('x', 1, d));
+    const d = computeDashboard(input({ quarter: q4, quarterStart: '2026-10-01', goals: [goal('x', 'health')], logs, today: '2026-10-01' }));
+    expect(d.consistencyScore).toBeGreaterThan(80);
+    expect(d.streak.current).toBe(21);
+  });
+});

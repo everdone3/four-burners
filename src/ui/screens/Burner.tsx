@@ -6,6 +6,7 @@ import {
   INTENT_LABELS,
   countHigh,
   MAX_HIGH_BURNERS,
+  crunchDateSet,
   peopleByUrgency,
   type BurnerId,
   type Person,
@@ -35,6 +36,7 @@ export function BurnerScreen({ state, burner }: { state: AppState; burner: Burne
   const isPeopleBurner = burner === "family" || burner === "friends";
   const people = isPeopleBurner ? peopleByUrgency(data.people.filter((p) => p.burner === burner), data.touchpoints, state.today) : [];
   const detail = s.goals.find((g) => g.goal.id === detailId);
+  const crunchSet = crunchDateSet(data.crunch, state.today);
   const goalCounts = Object.fromEntries(BURNERS.map((b) => [b, dashboard.burners[b].goals.length])) as Record<BurnerId, number>;
   const [editor, setEditor] = useState<{ open: boolean; goal?: Goal }>({ open: false });
   const [pendingIntent, setPendingIntent] = useState<Intent | null>(null);
@@ -119,7 +121,7 @@ export function BurnerScreen({ state, burner }: { state: AppState; burner: Burne
         </div>
         <div className="space-y-2.5">
           {s.goals.map(({ goal, progress }) => (
-            <GoalRow key={goal.id} goal={goal} progress={progress} logs={data.logs} onOpen={() => setDetailId(goal.id)} />
+            <GoalRow key={goal.id} goal={goal} progress={progress} logs={data.logs} today={state.today} crunch={crunchSet} onOpen={() => setDetailId(goal.id)} />
           ))}
           {s.goals.length === 0 && (
             <p className="rounded-2xl border border-dashed border-line px-4 py-6 text-center text-[15px] text-dim">

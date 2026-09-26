@@ -1,7 +1,10 @@
 import { useEffect, useState } from 'react';
 import {
   BURNER_LABELS,
+  DEFAULT_SETTINGS,
   checkGoal,
+  diffDays,
+  today,
   goalSlot,
   newId,
   quarterSpan,
@@ -14,6 +17,7 @@ import {
   type QuarterId,
 } from '@/domain';
 import { addGoal, deleteGoal, updateGoal } from '@/data/repo';
+import { now as clockNow } from '@/data/clock';
 import { Field, GhostButton, PrimaryButton, Segmented, Sheet, inputClass } from '../components/ui';
 
 const TYPES: { value: GoalType; label: string }[] = [
@@ -43,6 +47,10 @@ export function GoalEditor({
   goalCounts: Record<BurnerId, number>;
 }) {
   const span = quarterSpan(quarterId);
+  // Goals added mid-quarter are judged only on the days left (proration). Say so up front.
+  const todayLocal = today(DEFAULT_SETTINGS.dayBoundaryHour, clockNow());
+  const daysLeft = todayLocal > span.start && todayLocal <= span.end ? diffDays(todayLocal, span.end) + 1 : null;
+  const daysTotal = diffDays(span.start, span.end) + 1;
   const [title, setTitle] = useState('');
   const [type, setType] = useState<GoalType>('habit');
   const [target, setTarget] = useState('');
@@ -109,6 +117,11 @@ export function GoalEditor({
           }}
         >
           {!goal && slot.message && <p className="text-[14px] text-amber-200">{slot.message}</p>}
+          {!goal && daysLeft !== null && (
+            <p className="rounded-2xl border border-sky-300/20 bg-sky-300/[0.06] px-3.5 py-2.5 text-[14px] text-sky-100">
+              {daysLeft} of {daysTotal} days left this quarter. This goal is judged only on the time remaining, so set the target for {daysLeft} days.
+            </p>
+          )}
           <Field label="Goal">
             <input
               className={inputClass}

@@ -50,6 +50,13 @@ export interface IntentChange {
   localDate: LocalDate;
 }
 
+export interface QuarterSummary {
+  progressScore: number;
+  consistencyScore: number;
+  longestStreak: number;
+  checkInDays: number;
+}
+
 export interface Quarter extends BaseRecord {
   /** Same as QuarterId, e.g. '2026-Q3'. */
   id: QuarterId;
@@ -57,7 +64,16 @@ export interface Quarter extends BaseRecord {
   intents: Record<BurnerId, Intent>;
   intentHistory: IntentChange[];
   status: 'active' | 'closed';
+  /** When the guided quarter setup was finished. */
+  setupAt?: Instant;
+  /** When the guided quarter close was finished. */
+  closedAt?: Instant;
+  /** Final scores, frozen at close for the archive. */
+  summary?: QuarterSummary;
 }
+
+export type Grade = 'A' | 'B' | 'C' | 'D' | 'F';
+export type CloseDecision = 'carry' | 'modify' | 'drop';
 
 export interface Milestone {
   id: string;
@@ -83,6 +99,12 @@ export interface Goal extends BaseRecord {
   milestones?: Milestone[];
   personIds?: string[];
   order: number;
+  /** Set during quarter close. */
+  grade?: Grade;
+  closeDecision?: CloseDecision;
+  /** The goal this was carried forward from, and the goal it was carried into. */
+  carriedFromId?: string;
+  carriedToId?: string;
 }
 
 export interface LogEdit {
@@ -130,11 +152,38 @@ export interface CrunchPeriod extends BaseRecord {
   label?: string;
 }
 
+export interface WeeklyReview extends BaseRecord {
+  /** Monday of the week being reviewed. Review ids are `review-<weekStart>` so devices never duplicate. */
+  weekStart: LocalDate;
+  /** Current step index, saved on every move so the review resumes exactly. */
+  step: number;
+  wins: string[];
+  misses: string[];
+  focus: string;
+  focusBurners: BurnerId[];
+  /** Half-typed text, so leaving the app mid-sentence loses nothing. */
+  drafts?: { win?: string; miss?: string; action?: string };
+  coachSkipped?: boolean;
+  completedAt?: Instant;
+}
+
+export interface WeeklyAction extends BaseRecord {
+  /** Monday of the week this action is for. */
+  weekStart: LocalDate;
+  text: string;
+  burner?: BurnerId;
+  order: number;
+  /** Set when tapped done. Counts as a check-in. */
+  done?: Stamp;
+}
+
 export interface Settings {
   dayBoundaryHour: number;
   graceDaysPerWeek: number;
   soundEffects: boolean;
   haptics: boolean;
+  /** Weekly review day, 0 = Monday ... 6 = Sunday. */
+  reviewDay: number;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -142,4 +191,5 @@ export const DEFAULT_SETTINGS: Settings = {
   graceDaysPerWeek: 1,
   soundEffects: true,
   haptics: true,
+  reviewDay: 6,
 };

@@ -1,9 +1,15 @@
 // Dev-only sample data: a realistic previous quarter plus the current quarter to date.
 // Every sample record id starts with "sample-" so it can be wiped without touching real data.
 import {
+  BURNERS,
   addDays,
+  computeDashboard,
   dateRange,
   prevQuarterId,
+  quarterHighlights,
+  startOfWeek,
+  suggestedGrade,
+  summaryFrom,
   quarterOf,
   quarterSpan,
   weekday,
@@ -17,11 +23,14 @@ import {
   type Person,
   type Quarter,
   type QuarterId,
+  type Settings,
   type Touchpoint,
   type TouchpointType,
+  type WeeklyAction,
+  type WeeklyReview,
 } from '@/domain';
 import { db } from './db';
-import { currentToday } from './repo';
+import { currentToday, getSettings } from './repo';
 
 const SAMPLE_QUARTERS_KEY = 'sampleQuarters';
 const OFFSET = -240; // EDT
@@ -277,6 +286,12 @@ export async function loadSampleData(): Promise<void> {
   };
   for (const set of [prev.goals, cur.goals]) link(set, 'Call a close friend', ['Jake', 'Priya', 'Marcus']);
 
+  // Last quarter went through its close: grades, decisions, carry links, and a frozen summary.
+  const settings = await getSettings();
+  closeSampleQuarter(prev, cur, people, settings);
+  // Weekly reviews (wins, misses, focus) and the actions they created, including this week's.
+  const { reviews, actions } = sampleRituals(quarterSpan(previous).start, today, [...prev.crunch, ...cur.crunch]);
+
   // Quarters with real goals are left alone; empty ones (e.g. auto-created) get the sample setup.
   const realGoals = await db.goals.filter((g) => !g.id.startsWith('sample-') && !g.deleted).toArray();
   const existingQuarters = new Set(realGoals.map((g) => g.quarterId));
@@ -293,8 +308,118 @@ export async function loadSampleData(): Promise<void> {
       await db.crunch.bulkPut(g.crunch);
     }
     await db.people.bulkPut(people);
+    await db.reviews.bulkPut(reviews);
+    await db.actions.bulkPut(actions);
     await db.kv.put({ key: SAMPLE_QUARTERS_KEY, value: createdQuarters, updatedAt: new Date().toISOString() });
   });
+}
+
+function closeSampleQuarter(prev: Generated, cur: Generated, people: Person[], settings: Settings) {
+  const span = quarterSpan(prev.quarter.id);
+  const input = {
+    quarter: prev.quarter,
+    goals: prev.goals,
+    logs: prev.logs,
+    energy: prev.energy,
+    people,
+    touchpoints: prev.touchpoints,
+    crunch: prev.crunch,
+    settings,
+    today: span.end,
+  };
+  const dash = computeDashboard({ ...input, quarterStart: span.start });
+  for (const b of BURNERS) {
+    for (const { goal, progress } of dash.burners[b].goals) {
+      goal.grade = suggestedGrade(progress.fraction, progress.complete);
+      goal.closeDecision =
+        goal.type === 'yesno' || (goal.type === 'milestone' && progress.complete) ? 'drop' : progress.fraction >= 0.6 ? 'carry' : 'modify';
+      const next = cur.goals.find((g) => g.title === goal.title);
+      if (next && goal.closeDecision !== 'drop') {
+        goal.carriedToId = next.id;
+        next.carriedFromId = goal.id;
+      }
+    }
+  }
+  prev.quarter.summary = summaryFrom(quarterHighlights(input));
+  prev.quarter.closedAt = at(addDays(span.end, 1), 19);
+  prev.quarter.setupAt = at(span.start, 8);
+  cur.quarter.setupAt = at(quarterSpan(cur.quarter.id).start, 8);
+}
+
+const WIN_BANK = [
+  'Date night at the new Thai place',
+  'Hit every run this week',
+  'Protected all four deep work blocks',
+  'Bedtime with the kids three nights',
+  'Long call with Jake',
+  'Lights out by 10:30 five nights',
+  'Finished the second book',
+  'Said no to a low-value meeting',
+  'Sunday pancakes with the kids',
+];
+const MISS_BANK = [
+  'Skipped strength training twice',
+  'Worked late Wednesday and Thursday',
+  'Never called Priya back',
+  'Phone in bed again',
+  'Missed the Saturday long run',
+  'Too much reactive email',
+];
+const FOCUS_BANK = ['Protect mornings', 'Home by 7 three nights', 'Move every day', 'Fewer meetings, more thinking', 'Be present at dinner', 'Rest and recover'];
+const ACTION_BANK: Array<[string, BurnerId]> = [
+  ['Book the sitter for Friday', 'family'],
+  ['Plan Saturday morning with the kids', 'family'],
+  ['Call Mom on Sunday', 'family'],
+  ['Text Jake about golf', 'friends'],
+  ['Invite Priya and Sam to dinner', 'friends'],
+  ['Three runs: Tue, Thu, Sat', 'health'],
+  ['Meal prep Sunday', 'health'],
+  ['Phone charges in the kitchen', 'health'],
+  ['Block 8 to 10 every morning', 'work'],
+  ['Inbox to zero by Friday noon', 'work'],
+];
+
+function sampleRituals(from: LocalDate, today: LocalDate, crunch: CrunchPeriod[]) {
+  const r = rng(99);
+  const pick = <T,>(xs: T[], n: number) => [...xs].sort(() => r() - 0.5).slice(0, n);
+  const thisWeek = startOfWeek(today);
+  const travel = new Set(crunch.flatMap((c) => dateRange(c.start, c.end ?? c.start)));
+  const reviews: WeeklyReview[] = [];
+  const actions: WeeklyAction[] = [];
+  for (let w = startOfWeek(from); w < thisWeek; w = addDays(w, 7)) {
+    // Skipped during the travel week and the odd busy week, like real life.
+    if (travel.has(addDays(w, 2)) || r() < 0.12) continue;
+    const sunday = addDays(w, 6);
+    reviews.push({
+      id: `sample-review-${w}`,
+      weekStart: w,
+      step: 5,
+      wins: pick(WIN_BANK, 2 + Math.floor(r() * 2)),
+      misses: pick(MISS_BANK, 1 + Math.floor(r() * 2)),
+      focus: FOCUS_BANK[Math.floor(r() * FOCUS_BANK.length)],
+      focusBurners: [],
+      coachSkipped: true,
+      completedAt: at(sunday, 19, 30),
+      createdAt: at(sunday, 19),
+      updatedAt: at(sunday, 19, 30),
+    });
+    const forWeek = addDays(w, 7);
+    pick(ACTION_BANK, 3).forEach(([text, burner], i) => {
+      const doneDay = addDays(forWeek, Math.floor(r() * 7));
+      const isDone = forWeek < thisWeek ? r() < 0.75 : doneDay <= today && r() < 0.6;
+      actions.push({
+        id: sid('action'),
+        weekStart: forWeek,
+        text,
+        burner,
+        order: i,
+        createdAt: at(sunday, 19, 20),
+        updatedAt: at(sunday, 19, 20),
+        ...(isDone ? { done: { at: at(doneDay, 18), offsetMin: OFFSET, localDate: doneDay } } : {}),
+      });
+    });
+  }
+  return { reviews, actions };
 }
 
 export async function wipeSampleData(): Promise<void> {
@@ -315,6 +440,8 @@ export async function wipeSampleData(): Promise<void> {
       db.people.filter(isSample).delete(),
       db.touchpoints.filter((t) => isSample(t) || samplePeople.has(t.personId)).delete(),
       db.crunch.filter(isSample).delete(),
+      db.reviews.filter(isSample).delete(),
+      db.actions.filter(isSample).delete(),
       db.quarters.bulkDelete(createdQuarters.filter((q) => !realGoalQuarters.has(q))),
       db.kv.delete(SAMPLE_QUARTERS_KEY),
     ]);

@@ -1,7 +1,7 @@
 // Streaks, grace days, consistency, and time zone forgiveness.
 import { CONSISTENCY_WINDOW_DAYS } from './config';
-import { addDays, dateRange, diffDays, localDateFor, maxDate, startOfWeek } from './dates';
-import type { LocalDate, Stamp } from './types';
+import { addDays, addMonths, dateRange, diffDays, localDateFor, maxDate, startOfMonth, startOfWeek } from './dates';
+import type { Goal, LocalDate, LogEntry, Stamp } from './types';
 
 export interface StreakInput {
   /** Lived dates with at least one check-in. */
@@ -131,4 +131,45 @@ export function consistencyScore(input: ConsistencyInput): number {
   const streak = dailyStreak(input).current;
   const bonus = Math.min(1, streak / 14);
   return Math.round((coverage * 0.85 + bonus * 0.15) * 100);
+}
+
+/**
+ * Streak for a habit goal: consecutive weeks (or months) where the target was met.
+ * - The current period never breaks the streak while it is still in progress.
+ * - A partial first period (goal added mid-week) holds instead of breaking.
+ * - A period that is at least half Travel/Crunch days holds instead of breaking.
+ */
+export function habitStreak(
+  goal: Goal,
+  logs: readonly LogEntry[],
+  today: LocalDate,
+  crunchDates?: ReadonlySet<LocalDate>,
+): StreakResult {
+  const zero = { current: 0, longest: 0, graceUsedThisWeek: 0 };
+  if (goal.type !== 'habit' || !goal.target) return zero;
+  const end = today < goal.deadline ? today : goal.deadline;
+  if (end < goal.startDate) return zero;
+  const monthly = goal.habitPeriod === 'month';
+  const periodOf = (d: LocalDate) => (monthly ? startOfMonth(d) : startOfWeek(d));
+  const next = (p: LocalDate) => (monthly ? addMonths(p, 1) : addDays(p, 7));
+
+  const starts: LocalDate[] = [];
+  for (let p = periodOf(goal.startDate); p <= periodOf(end); p = next(p)) starts.push(p);
+
+  const counts = new Map<LocalDate, number>();
+  for (const l of logs) {
+    if (l.deleted || l.goalId !== goal.id || l.localDate < goal.startDate || l.localDate > end) continue;
+    const p = periodOf(l.localDate);
+    counts.set(p, (counts.get(p) ?? 0) + l.value);
+  }
+
+  const paused = new Set<LocalDate>();
+  if (goal.startDate > starts[0]) paused.add(starts[0]);
+  if (crunchDates?.size) {
+    for (const p of starts) {
+      const days = dateRange(p, addDays(next(p), -1));
+      if (days.filter((d) => crunchDates.has(d)).length * 2 >= days.length) paused.add(p);
+    }
+  }
+  return periodStreak(counts, starts, goal.target, paused);
 }

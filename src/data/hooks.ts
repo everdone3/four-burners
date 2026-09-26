@@ -1,20 +1,40 @@
 // Reactive reads for the UI. Recompute whenever IndexedDB changes.
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
-import { computeDashboard, quarterOf, today as todayFor, type Dashboard, type EnergyEntry, type Goal, type LogEntry, type Person, type Quarter, type Settings, type Touchpoint } from '@/domain';
+import {
+  activeCrunch,
+  computeDashboard,
+  quarterNeedingClose,
+  quarterOf,
+  today as todayFor,
+  type CrunchPeriod,
+  type Dashboard,
+  type EnergyEntry,
+  type Goal,
+  type LogEntry,
+  type Person,
+  type Quarter,
+  type Settings,
+  type Touchpoint,
+  type WeeklyAction,
+  type WeeklyReview,
+} from '@/domain';
+import { now as clockNow } from './clock';
 import { db } from './db';
 import { ensureCurrentQuarter, getSettings } from './repo';
 
-/** Today's lived date, refreshed each minute and when the app returns to the foreground. */
+/** Today's lived date, refreshed each minute, on return to the foreground, and on dev time travel. */
 export function useToday(settings: Settings | undefined): string | undefined {
-  const [now, setNow] = useState(() => new Date());
+  const [now, setNow] = useState(() => clockNow());
   useEffect(() => {
-    const tick = () => setNow(new Date());
+    const tick = () => setNow(clockNow());
     const id = setInterval(tick, 60_000);
     document.addEventListener('visibilitychange', tick);
+    window.addEventListener('fb-clock', tick);
     return () => {
       clearInterval(id);
       document.removeEventListener('visibilitychange', tick);
+      window.removeEventListener('fb-clock', tick);
     };
   }, []);
   return settings ? todayFor(settings.dayBoundaryHour, now) : undefined;
@@ -29,22 +49,32 @@ export interface AppState {
   today: string;
   quarter: Quarter;
   dashboard: Dashboard;
+  /** A past quarter still waiting for its close ritual. */
+  pendingClose?: Quarter;
+  /** True when the current quarter has not been set up (no guided setup and no goals). */
+  needsSetup: boolean;
+  crunchNow?: CrunchPeriod;
+  quarters: Quarter[];
   data: {
     goals: Goal[];
+    allGoals: Goal[];
     logs: LogEntry[];
     people: Person[];
     touchpoints: Touchpoint[];
     energy: EnergyEntry[];
+    crunch: CrunchPeriod[];
+    reviews: WeeklyReview[];
+    actions: WeeklyAction[];
   };
 }
 
 export function useAppState(): AppState | undefined {
   const settings = useSettings();
   const today = useToday(settings);
-  const [quarterReady, setQuarterReady] = useState(false);
+  const [quarterReady, setQuarterReady] = useState<string | null>(null);
   useEffect(() => {
     if (!today) return;
-    ensureCurrentQuarter().then(() => setQuarterReady(true));
+    ensureCurrentQuarter().then((q) => setQuarterReady(q.id));
   }, [today]);
 
   return useLiveQuery(async () => {
@@ -56,14 +86,18 @@ export function useAppState(): AppState | undefined {
       setTimeout(() => void ensureCurrentQuarter(), 0);
       return undefined;
     }
-    const [goals, logs, energy, people, touchpoints, crunch] = await Promise.all([
-      db.goals.where('quarterId').equals(span.id).toArray(),
+    const [quarters, allGoals, logs, energy, people, touchpoints, crunch, reviews, actions] = await Promise.all([
+      db.quarters.toArray(),
+      db.goals.toArray(),
       db.logs.toArray(),
       db.energy.toArray(),
       db.people.toArray(),
       db.touchpoints.toArray(),
       db.crunch.toArray(),
+      db.reviews.toArray(),
+      db.actions.toArray(),
     ]);
+    const goals = allGoals.filter((g) => g.quarterId === span.id);
     const dashboard = computeDashboard({
       quarter,
       quarterStart: span.start,
@@ -73,15 +107,31 @@ export function useAppState(): AppState | undefined {
       people,
       touchpoints,
       crunch,
+      actions,
       settings,
       today,
     });
+    const liveGoals = allGoals.filter((g) => !g.deleted);
     return {
       settings,
       today,
       quarter,
       dashboard,
-      data: { goals: goals.filter((g) => !g.deleted), logs: logs.filter((l) => !l.deleted), people: people.filter((p) => !p.deleted), touchpoints, energy: energy.filter((e) => !e.deleted) },
+      pendingClose: quarterNeedingClose(quarters, liveGoals, span.id),
+      needsSetup: !quarter.setupAt && !goals.some((g) => !g.deleted),
+      crunchNow: activeCrunch(crunch, today),
+      quarters,
+      data: {
+        goals: goals.filter((g) => !g.deleted),
+        allGoals: liveGoals,
+        logs: logs.filter((l) => !l.deleted),
+        people: people.filter((p) => !p.deleted),
+        touchpoints,
+        energy: energy.filter((e) => !e.deleted),
+        crunch: crunch.filter((c) => !c.deleted),
+        reviews: reviews.filter((r) => !r.deleted),
+        actions: actions.filter((a) => !a.deleted),
+      },
     };
   }, [settings, today, quarterReady]);
 }

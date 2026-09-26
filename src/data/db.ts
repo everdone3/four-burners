@@ -9,7 +9,9 @@ import type {
   Quarter,
   Settings,
   Touchpoint,
-} from '@/domain';
+  WeeklyAction,
+  WeeklyReview,
+} from "@/domain";
 
 export interface KV {
   key: string;
@@ -24,7 +26,9 @@ export class FourBurnersDB extends Dexie {
   energy!: EntityTable<EnergyEntry, 'id'>;
   people!: EntityTable<Person, 'id'>;
   touchpoints!: EntityTable<Touchpoint, 'id'>;
-  crunch!: EntityTable<CrunchPeriod, 'id'>;
+  crunch!: EntityTable<CrunchPeriod, "id">;
+  reviews!: EntityTable<WeeklyReview, "id">;
+  actions!: EntityTable<WeeklyAction, "id">;
   kv!: EntityTable<KV, 'key'>;
 
   constructor(name = 'four-burners') {
@@ -39,6 +43,11 @@ export class FourBurnersDB extends Dexie {
       touchpoints: 'id, personId, localDate, updatedAt',
       crunch: 'id, start, updatedAt',
       kv: 'key',
+    });
+    // v2: weekly reviews and the actions they create.
+    this.version(2).stores({
+      reviews: 'id, weekStart, updatedAt',
+      actions: 'id, weekStart, updatedAt',
     });
   }
 }

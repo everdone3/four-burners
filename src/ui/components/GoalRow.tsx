@@ -3,7 +3,7 @@
 // Milestone: tap to reveal the next step, tap to complete it.
 import { AnimatePresence, motion } from 'motion/react';
 import { useState } from 'react';
-import type { Goal, GoalProgress, LogEntry } from '@/domain';
+import { habitStreak, type Goal, type GoalProgress, type LogEntry } from "@/domain";
 import { deleteLog, editLog, logProgress } from '@/data/repo';
 import { useNotePrompt } from './NotePrompt';
 import { celebrate } from '../fx/Celebrations';
@@ -66,6 +66,8 @@ export function GoalRow({
   logs,
   showBurner,
   onOpen,
+  today,
+  crunch,
 }: {
   goal: Goal;
   progress: GoalProgress;
@@ -73,6 +75,9 @@ export function GoalRow({
   showBurner?: boolean;
   /** When set, tapping the goal opens its details and only the + button logs. */
   onOpen?: () => void;
+  /** When given, habit goals show their current week or month streak. */
+  today?: string;
+  crunch?: ReadonlySet<string>;
 }) {
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState('');
@@ -83,6 +88,7 @@ export function GoalRow({
   const accent = p.accent;
   const nextStep = goal.milestones?.find((m) => !m.doneAt);
   const finished = progress.complete && goal.type !== 'number' && goal.type !== 'habit';
+  const hStreak = today && goal.type === "habit" ? habitStreak(goal, logs, today, crunch).current : 0;
 
   const doLog = async (value: number, at: Point, milestoneId?: string) => {
     setSweep((n) => n + 1);
@@ -128,6 +134,11 @@ export function GoalRow({
           <div className="mt-0.5 flex gap-2 text-[13px]">
             <span className="text-dim tabular">{progressText(goal, progress)}</span>
             <span className={`font-medium ${STATUS_COLOR[progress.status]}`}>{STATUS_LABEL[progress.status]}</span>
+            {hStreak >= 2 && (
+              <span className="font-semibold text-ember" aria-label={`${hStreak} ${goal.habitPeriod === "month" ? "month" : "week"} streak`}>
+                🔥 {hStreak} {goal.habitPeriod === "month" ? "mo" : "wk"}
+              </span>
+            )}
           </div>
           <div className="mt-2.5">
             <LavaBar fraction={progress.fraction} color={accent} hot={p.core} />

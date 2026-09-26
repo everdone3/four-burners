@@ -4,27 +4,37 @@ import {
   DEFAULT_SETTINGS,
   applyLogEdit,
   canSetIntent,
+  carryForward,
   changeIntent,
   energyOn,
   newId,
+  nextQuarterId,
   quarterOf,
   quarterSpan,
   stampNow,
   today as todayFor,
+  validateIntents,
   type BurnerId,
+  type CloseDecision,
   type EnergyEntry,
   type Goal,
+  type Grade,
   type Intent,
+  type LocalDate,
   type LogEntry,
   type LogPatch,
   type Person,
   type Quarter,
   type QuarterId,
+  type QuarterSummary,
   type Settings,
   type Touchpoint,
   type TouchpointType,
+  type WeeklyAction,
+  type WeeklyReview,
 } from '@/domain';
 import { db, SETTINGS_KEY } from './db';
+import { now as clockNow } from './clock';
 
 const nowIso = () => new Date().toISOString();
 
@@ -39,7 +49,7 @@ export async function saveSettings(patch: Partial<Settings>): Promise<void> {
 }
 
 export async function currentToday(): Promise<string> {
-  return todayFor((await getSettings()).dayBoundaryHour);
+  return todayFor((await getSettings()).dayBoundaryHour, clockNow());
 }
 
 /** Get the quarter containing today, creating it on first use. */
@@ -89,7 +99,7 @@ export async function setIntent(
   if (!cap.ok) return cap;
   if (!reason?.trim()) return { ok: false, error: 'Add a short reason.', needsReason: true };
   const settings = await getSettings();
-  const s = stampNow(settings.dayBoundaryHour);
+  const s = stampNow(settings.dayBoundaryHour, clockNow());
   const r = changeIntent(q, burner, intent, reason, s.at, s.localDate);
   if (!r.ok) return r;
   await db.quarters.put(r.value);
@@ -142,7 +152,7 @@ export interface LogOptions {
 
 export async function logProgress(goal: Goal, value: number, opts: LogOptions = {}): Promise<LogEntry> {
   const settings = await getSettings();
-  const s = stampNow(settings.dayBoundaryHour);
+  const s = stampNow(settings.dayBoundaryHour, clockNow());
   const entry: LogEntry = {
     id: newId(),
     goalId: goal.id,
@@ -235,7 +245,7 @@ async function linkPersonToGoals(personId: string, goalIds: string[]): Promise<v
 }
 
 export async function logTouchpoint(personId: string, type: TouchpointType, note?: string, notePrivate?: boolean): Promise<Touchpoint> {
-  const s = stampNow((await getSettings()).dayBoundaryHour);
+  const s = stampNow((await getSettings()).dayBoundaryHour, clockNow());
   const tp: Touchpoint = {
     id: newId(),
     personId,
@@ -266,7 +276,7 @@ export async function deleteTouchpoint(id: string): Promise<void> {
 
 /** One rating per lived day; tapping again changes it. Pass null to clear. */
 export async function setEnergy(rating: EnergyEntry['rating'] | null): Promise<void> {
-  const s = stampNow((await getSettings()).dayBoundaryHour);
+  const s = stampNow((await getSettings()).dayBoundaryHour, clockNow());
   const existing = energyOn(await db.energy.where('localDate').equals(s.localDate).toArray(), s.localDate);
   if (rating === null) {
     if (existing) await db.energy.update(existing.id, { deleted: true, updatedAt: s.at });
@@ -291,4 +301,175 @@ export async function restoreLog(id: string): Promise<void> {
       }
     }
   });
+}
+
+async function stamp() {
+  return stampNow((await getSettings()).dayBoundaryHour, clockNow());
+}
+
+// ---------- Weekly review ----------
+
+/** Deterministic id per week so two devices never create two reviews for the same week. */
+export const reviewId = (weekStart: LocalDate) => `review-${weekStart}`;
+
+export async function getOrCreateReview(weekStart: LocalDate): Promise<WeeklyReview> {
+  const id = reviewId(weekStart);
+  const existing = await db.reviews.where('weekStart').equals(weekStart).filter((r) => !r.deleted).first();
+  if (existing) return existing;
+  const t = nowIso();
+  const review: WeeklyReview = { id, weekStart, step: 0, wins: [], misses: [], focus: '', focusBurners: [], createdAt: t, updatedAt: t };
+  await db.reviews.put(review);
+  return review;
+}
+
+export async function saveReview(id: string, patch: Partial<WeeklyReview>): Promise<void> {
+  await db.reviews.update(id, { ...patch, updatedAt: nowIso() });
+}
+
+export async function completeReview(id: string): Promise<void> {
+  const s = await stamp();
+  await db.reviews.update(id, { completedAt: s.at, updatedAt: nowIso() });
+}
+
+// ---------- Weekly actions ----------
+
+export async function addAction(weekStart: LocalDate, text: string, burner?: BurnerId): Promise<WeeklyAction> {
+  const t = nowIso();
+  const order = await db.actions.where('weekStart').equals(weekStart).filter((a) => !a.deleted).count();
+  const action: WeeklyAction = { id: newId(), weekStart, text: text.trim(), burner, order, createdAt: t, updatedAt: t };
+  await db.actions.put(action);
+  return action;
+}
+
+export async function updateAction(id: string, patch: Partial<WeeklyAction>): Promise<void> {
+  await db.actions.update(id, { ...patch, updatedAt: nowIso() });
+}
+
+export async function removeAction(id: string): Promise<void> {
+  await db.actions.update(id, { deleted: true, updatedAt: nowIso() });
+}
+
+/** Tap an action done (a check-in), or tap again to undo. Returns whether it is now done. */
+export async function toggleAction(id: string): Promise<boolean> {
+  const a = await db.actions.get(id);
+  if (!a) return false;
+  if (a.done) {
+    await db.actions.update(id, { done: undefined, updatedAt: nowIso() });
+    return false;
+  }
+  await db.actions.update(id, { done: await stamp(), updatedAt: nowIso() });
+  return true;
+}
+
+// ---------- Travel/Crunch mode ----------
+
+export async function startCrunch(opts: { end?: LocalDate; label?: string } = {}): Promise<void> {
+  const s = await stamp();
+  const t = nowIso();
+  await endCrunch();
+  await db.crunch.put({
+    id: newId(),
+    start: s.localDate,
+    ...(opts.end && opts.end >= s.localDate ? { end: opts.end } : {}),
+    ...(opts.label ? { label: opts.label } : {}),
+    createdAt: t,
+    updatedAt: t,
+  });
+}
+
+/** End any crunch covering today. Today still counts as a crunch day, unless it only started today. */
+export async function endCrunch(): Promise<void> {
+  const today = (await stamp()).localDate;
+  const t = nowIso();
+  const open = await db.crunch.filter((p) => !p.deleted && p.start <= today && (!p.end || p.end >= today)).toArray();
+  for (const p of open) {
+    if (p.start === today) await db.crunch.update(p.id, { deleted: true, updatedAt: t });
+    else await db.crunch.update(p.id, { end: today, updatedAt: t });
+  }
+}
+
+// ---------- Quarter close and setup ----------
+
+export async function gradeGoal(id: string, grade: Grade): Promise<void> {
+  await db.goals.update(id, { grade, updatedAt: nowIso() });
+}
+
+export async function decideGoal(id: string, closeDecision: CloseDecision): Promise<void> {
+  await db.goals.update(id, { closeDecision, updatedAt: nowIso() });
+}
+
+/**
+ * Close a quarter: freeze its summary, carry forward goals marked carry/modify into the next quarter
+ * (fresh progress, starting today if the close happens late), and pre-fill next quarter's intents.
+ * Safe to run twice: already-carried goals are skipped.
+ */
+export async function closeQuarter(quarterId: QuarterId, summary: QuarterSummary): Promise<QuarterId> {
+  const nextId = nextQuarterId(quarterId);
+  const nextSpan = quarterSpan(nextId);
+  const today = await currentToday();
+  const startDate = today > nextSpan.start && today <= nextSpan.end ? today : nextSpan.start;
+  const t = nowIso();
+  await db.transaction('rw', db.quarters, db.goals, async () => {
+    const q = await db.quarters.get(quarterId);
+    if (!q) return;
+    const next = await db.quarters.get(nextId);
+    if (!next) {
+      await db.quarters.put({ id: nextId, createdAt: t, updatedAt: t, intents: { ...q.intents }, intentHistory: [], status: 'active' });
+    } else if (!next.setupAt) {
+      const hasGoals = (await db.goals.where('quarterId').equals(nextId).filter((g) => !g.deleted).count()) > 0;
+      if (!hasGoals) await db.quarters.update(nextId, { intents: { ...q.intents }, updatedAt: t });
+    }
+    const nextGoals = await db.goals.where('quarterId').equals(nextId).filter((g) => !g.deleted).toArray();
+    const order: Record<BurnerId, number> = { family: 0, friends: 0, health: 0, work: 0 };
+    for (const g of nextGoals) order[g.burner] = Math.max(order[g.burner], g.order + 1);
+    const goals = await db.goals.where('quarterId').equals(quarterId).filter((g) => !g.deleted).toArray();
+    for (const g of goals.sort((a, b) => a.order - b.order)) {
+      if ((g.closeDecision !== 'carry' && g.closeDecision !== 'modify') || g.carriedToId) continue;
+      const c = carryForward(g, { quarterId: nextId, startDate, deadline: nextSpan.end }, newId(), t, order[g.burner]++);
+      await db.goals.put(c);
+      await db.goals.update(g.id, { carriedToId: c.id, updatedAt: t });
+    }
+    await db.quarters.update(quarterId, { status: 'closed', closedAt: t, summary, updatedAt: t });
+  });
+  return nextId;
+}
+
+/** Intents during guided setup: the High cap applies, but no reason or history is needed yet. */
+export async function setSetupIntents(quarterId: QuarterId, intents: Record<BurnerId, Intent>): Promise<IntentResult> {
+  const r = validateIntents(intents);
+  if (!r.ok) return r;
+  await db.quarters.update(quarterId, { intents: { ...intents }, updatedAt: nowIso() });
+  return { ok: true };
+}
+
+export async function finishSetup(quarterId: QuarterId): Promise<void> {
+  await db.quarters.update(quarterId, { setupAt: nowIso(), updatedAt: nowIso() });
+}
+
+// ---------- Travel awareness ----------
+
+const OFFSET_KEY = 'lastOffsetMin';
+
+/** Returns the old and new UTC offsets if the device changed time zones since the last check. */
+export async function checkTimeZoneChange(): Promise<{ from: number; to: number } | null> {
+  const to = -clockNow().getTimezoneOffset();
+  const row = await db.kv.get(OFFSET_KEY);
+  await db.kv.put({ key: OFFSET_KEY, value: to, updatedAt: nowIso() });
+  if (row === undefined || row.value === to) return null;
+  return { from: row.value as number, to };
+}
+
+const STREAK_KEY = 'lastStreakMilestone';
+export const STREAK_MILESTONES = [7, 14, 21, 30, 50, 75, 100, 150, 200, 365];
+
+/** The check-in streak milestone just reached (celebrated once each), or null. */
+export async function streakMilestoneReached(streak: number): Promise<number | null> {
+  const hit = [...STREAK_MILESTONES].reverse().find((m) => streak >= m) ?? 0;
+  const row = await db.kv.get(STREAK_KEY);
+  const last = (row?.value as number | undefined) ?? -1;
+  if (hit === last) return null;
+  await db.kv.put({ key: STREAK_KEY, value: hit, updatedAt: nowIso() });
+  // The first check just records where you are. Only a milestone crossed in the last couple of days
+  // celebrates, so jumps (loading data, syncing another device) stay quiet.
+  return last >= 0 && hit > last && streak - hit <= 2 ? hit : null;
 }

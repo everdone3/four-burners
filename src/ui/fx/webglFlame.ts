@@ -18,10 +18,12 @@ uniform float uBright;
 uniform float uBoost;
 uniform float uSeed;
 
+// Precision-safe hash (Dave Hoskins, "hash without sine"): scales inputs down before fract,
+// so noise stays smooth even when time-driven coordinates grow large.
 float hash(vec2 p) {
-  p = fract(p * vec2(123.34, 456.21));
-  p += dot(p, p + 45.32);
-  return fract(p.x * p.y);
+  vec3 p3 = fract(vec3(p.xyx) * 0.1031);
+  p3 += dot(p3, p3.yzx + 33.33);
+  return fract((p3.x + p3.y) * p3.z);
 }
 float noise(vec2 p) {
   vec2 i = floor(p);
@@ -65,7 +67,7 @@ void main() {
   float fade = 1.0 - smoothstep(0.1, 1.0, h + (n2 - 0.5) * 0.6);
   float f = clamp(body * fade * 1.25, 0.0, 1.0);
   // Separate licks of flame breaking off near the top.
-  float licks = smoothstep(0.6, 0.85, n2) * smoothstep(1.2, 0.45, h) * (1.0 - smoothstep(0.0, width * 1.8 + 0.02, abs(x)));
+  float licks = smoothstep(0.6, 0.85, n2) * (1.0 - smoothstep(0.45, 1.2, h)) * (1.0 - smoothstep(0.0, width * 1.8 + 0.02, abs(x)));
   f = max(f, licks * 0.55);
   // Hot core: a narrower, brighter tongue inside the body.
   float core = (1.0 - smoothstep(0.0, 0.55, edge)) * (1.0 - smoothstep(0.0, 0.55, h + (n - 0.5) * 0.3));
@@ -164,7 +166,8 @@ export class ShaderFlame {
     const gl = this.gl;
     gl.useProgram(this.prog);
     gl.uniform2f(this.u.uRes, this.canvas.width, this.canvas.height);
-    gl.uniform1f(this.u.uTime, time);
+    // Wrap the clock hourly so noise coordinates never grow large enough to lose precision.
+    gl.uniform1f(this.u.uTime, time % 3600);
     gl.uniform1f(this.u.uScale, s.scale);
     gl.uniform1f(this.u.uBright, s.brightness);
     gl.uniform1f(this.u.uBoost, s.boost);

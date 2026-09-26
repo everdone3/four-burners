@@ -4,7 +4,9 @@ import type { AppState } from '@/data/hooks';
 import { saveSettings, wipeAll } from '@/data/repo';
 import { hasSampleData, loadSampleData, wipeSampleData } from '@/data/sample';
 import { GhostButton, useToast } from '../components/ui';
-import { goBack } from '../router';
+import { goBack, navigate } from '../router';
+import { clockOffsetMs, setClockOffset, travelTo } from '@/data/clock';
+import { addDays, quarterSpan, weekday } from '@/domain';
 
 export function SettingsScreen({ state }: { state: AppState }) {
   const toast = useToast();
@@ -27,6 +29,31 @@ export function SettingsScreen({ state }: { state: AppState }) {
         Home
       </button>
       <h1 className="mt-2 font-display text-[34px] font-bold">Settings</h1>
+
+      <Section title="Rituals">
+        <div className="flex flex-col gap-2.5">
+          <GhostButton onClick={() => navigate('review')}>Open weekly review</GhostButton>
+          <GhostButton onClick={() => navigate('archive')}>Past quarters and highlights</GhostButton>
+          {state.quarter.status === 'active' && !state.pendingClose && (
+            <GhostButton onClick={() => navigate(`setup/${state.quarter.id}`)}>Quarter setup: theme, intents, goals</GhostButton>
+          )}
+        </div>
+        <div className="mt-3">
+          <Row label="Weekly review day" hint="The review card appears on this day and stays for 3 more.">
+            <select
+              className="rounded-xl border border-line bg-raised px-3 py-2"
+              value={state.settings.reviewDay}
+              onChange={(e) => saveSettings({ reviewDay: Number(e.target.value) })}
+            >
+              {['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'].map((d, i) => (
+                <option key={d} value={i}>
+                  {d}
+                </option>
+              ))}
+            </select>
+          </Row>
+        </div>
+      </Section>
 
       <Section title="Your day">
         <Row label="Day starts at" hint="Late-night logs before this count toward the day you were living.">
@@ -89,6 +116,21 @@ export function SettingsScreen({ state }: { state: AppState }) {
             Erase all data on this device
           </GhostButton>
         </div>
+
+        <div className="mt-5 border-t border-white/[0.08] pt-4">
+          <div className="text-[15px] font-semibold">Time travel</div>
+          <p className="mt-1 mb-3 text-[13px] text-faint">
+            Pretend it is another day to preview rituals. New logs are dated to the pretend day, so reload sample data afterward.
+            {clockOffsetMs() !== 0 && <span className="mt-1 block font-semibold text-amber-200">Active: today is {state.today}.</span>}
+          </p>
+          <div className="grid grid-cols-2 gap-2">
+            <GhostButton onClick={() => travelTo(nextDow(state.today, 6))}>Next Sunday</GhostButton>
+            <GhostButton onClick={() => travelTo(addDays(quarterSpan(state.quarter.id).end, 1))}>First day of next quarter</GhostButton>
+            <GhostButton className="col-span-2" disabled={clockOffsetMs() === 0} onClick={() => setClockOffset(0)}>
+              Back to the real date
+            </GhostButton>
+          </div>
+        </div>
       </Section>
     </div>
   );
@@ -128,4 +170,11 @@ function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: 
       <span className="absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all" style={{ left: checked ? 24 : 4 }} />
     </button>
   );
+}
+
+/** The next date (after today) falling on the given weekday, 0 = Monday. */
+function nextDow(today: string, dow: number): string {
+  let d = addDays(today, 1);
+  while (weekday(d) !== dow) d = addDays(d, 1);
+  return d;
 }

@@ -2,6 +2,7 @@
 import { animate, motion, useMotionValue, useTransform } from 'motion/react';
 import { useEffect, useId, type ReactNode } from 'react';
 import { useReducedMotion } from '../motion';
+import { PALETTES as PALETTES_REF } from '../theme';
 
 /** Number that counts up to its value. */
 export function CountUp({ value, duration = 1.4, delay = 0, className }: { value: number; duration?: number; delay?: number; className?: string }) {
@@ -226,7 +227,7 @@ export function StreakBadge({ days, grace }: { days: number; grace: boolean }) {
       initial={reduced ? false : { opacity: 0, scale: 0.8 }}
       animate={{ opacity: 1, scale: 1 }}
       transition={{ delay: 1.2, type: 'spring', stiffness: 300, damping: 20 }}
-      className="mx-auto mt-4 flex w-fit items-center gap-2 rounded-full border border-white/10 bg-black/60 px-4 py-2 backdrop-blur"
+      className="flex h-10 w-fit items-center gap-2 rounded-full border border-white/10 bg-black/60 px-4 backdrop-blur"
       style={{ boxShadow: `0 0 ${16 + heat * 30}px -6px rgba(255,140,40,${0.4 + heat * 0.5})` }}
     >
       <span aria-hidden className="text-[18px]" style={{ filter: `drop-shadow(0 0 ${4 + heat * 8}px #ff8a3d)` }}>🔥</span>
@@ -246,4 +247,40 @@ export function setIrisOrigin(x: number, y: number) {
 /** Where the last burner was tapped, so its page can iris open from that point. */
 export function getIrisOrigin(): { x: number; y: number } {
   return (window as unknown as { __iris?: { x: number; y: number } }).__iris ?? { x: innerWidth / 2, y: innerHeight / 3 };
+}
+
+/** Small glowing flame icon in a burner's colors (CSS only, cheap enough for lists). */
+export function MiniFlame({ burner, size = 22, lit = 1 }: { burner: import('@/domain').BurnerId; size?: number; lit?: number }) {
+  const p = PALETTES_REF[burner];
+  return (
+    <span
+      aria-hidden
+      className="inline-block shrink-0"
+      style={{
+        width: size * 0.72,
+        height: size,
+        borderRadius: '50% 50% 45% 45% / 62% 62% 38% 38%',
+        background: `radial-gradient(ellipse at 50% 78%, ${p.core} 0%, ${p.mid} 38%, ${p.outer} 72%, transparent 76%)`,
+        filter: `drop-shadow(0 0 ${3 + 6 * lit}px ${p.mid})`,
+        opacity: 0.3 + 0.7 * lit,
+      }}
+    />
+  );
+}
+
+/** Row of step "embers" for guided flows: done steps glow, the current one pulses. */
+export function StepEmbers({ count, current, color = '#ff9a3c' }: { count: number; current: number; color?: string }) {
+  return (
+    <div className="flex items-center gap-1.5" aria-label={`Step ${current + 1} of ${count}`}>
+      {Array.from({ length: count }, (_, i) => (
+        <motion.span
+          key={i}
+          className="h-1.5 rounded-full"
+          animate={{ width: i === current ? 22 : 8, opacity: i <= current ? 1 : 0.25 }}
+          transition={{ type: 'spring', stiffness: 400, damping: 30 }}
+          style={{ background: i <= current ? color : '#fff', boxShadow: i <= current ? `0 0 8px ${color}` : undefined }}
+        />
+      ))}
+    </div>
+  );
 }

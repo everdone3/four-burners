@@ -137,8 +137,10 @@ describe('progress against intent', () => {
         { id: 'd', title: 'D' },
       ],
     });
-    const p = goalProgress(m, [], '2026-08-15', { intent: 'steady' });
+    const p = goalProgress(m, [log('m', 1, '2026-07-10', { milestoneId: 'a' })], '2026-08-15', { intent: 'steady' });
     expect(p.actual).toBe(1);
+    // As of a date before the step was logged, it does not count.
+    expect(goalProgress(m, [log('m', 1, '2026-07-10', { milestoneId: 'a' })].filter((l) => l.localDate <= '2026-07-05'), '2026-07-05', { intent: 'steady' }).actual).toBe(0);
     expect(p.required).toBe(4);
     expect(p.fraction).toBe(0.25);
   });

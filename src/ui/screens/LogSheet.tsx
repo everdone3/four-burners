@@ -1,4 +1,4 @@
-import { BURNERS, BURNER_LABELS, peopleByUrgency } from "@/domain";
+import { BURNERS, BURNER_LABELS, crunchDateSet, peopleByUrgency } from "@/domain";
 import { PersonCard } from "../components/People";
 import type { AppState } from '@/data/hooks';
 import { GoalRow } from '../components/GoalRow';
@@ -8,6 +8,7 @@ import { PALETTES } from '../theme';
 export function LogSheet({ open, onClose, state }: { open: boolean; onClose: () => void; state: AppState }) {
   const { dashboard, data } = state;
   const people = peopleByUrgency(data.people, data.touchpoints, state.today);
+  const crunchSet = crunchDateSet(data.crunch, state.today);
   const any = BURNERS.some((b) => dashboard.burners[b].goals.length > 0);
   return (
     <Sheet open={open} onClose={onClose} title="Log progress">
@@ -23,7 +24,7 @@ export function LogSheet({ open, onClose, state }: { open: boolean; onClose: () 
               </h3>
               <div className="space-y-2">
                 {goals.map(({ goal, progress }) => (
-                  <GoalRow key={goal.id} goal={goal} progress={progress} logs={data.logs} />
+                  <GoalRow key={goal.id} goal={goal} progress={progress} logs={data.logs} today={state.today} crunch={crunchSet} />
                 ))}
               </div>
             </section>

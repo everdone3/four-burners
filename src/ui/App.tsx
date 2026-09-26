@@ -2,11 +2,17 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useState } from 'react';
 import { BURNERS, type BurnerId } from '@/domain';
 import { useAppState } from '@/data/hooks';
-import { ToastProvider } from './components/ui';
+import { ToastProvider, useToast } from './components/ui';
+import { Celebrations, celebrate } from './fx/Celebrations';
+import { checkTimeZoneChange, streakMilestoneReached } from '@/data/repo';
+import { ReviewScreen } from './screens/Review';
+import { ReelScreen } from './screens/Reel';
+import { CloseScreen } from './screens/Close';
+import { SetupScreen } from './screens/Setup';
+import { ArchiveScreen } from './screens/Archive';
 import { MoltenButton } from './components/sizzle';
 import { NotePromptProvider } from "./components/NotePrompt";
 import { Atmosphere } from './fx/Atmosphere';
-import { Celebrations } from './fx/Celebrations';
 import { setSoundEnabled, sfx } from './fx/audio';
 import { haptic, setHapticsEnabled } from './fx/haptics';
 import { useReducedMotion } from './motion';
@@ -34,6 +40,7 @@ function Shell() {
   const route = useRoute();
   const reduced = useReducedMotion();
   const [logOpen, setLogOpen] = useState(false);
+  const toast = useToast();
 
   useEffect(() => {
     if (!state) return;
@@ -48,16 +55,57 @@ function Shell() {
     return () => window.removeEventListener('pointerdown', unlock);
   }, []);
 
+  // Traveling: when the device lands in a new time zone, reassure that nothing broke.
+  useEffect(() => {
+    const check = async () => {
+      const change = await checkTimeZoneChange();
+      if (change) {
+        toast({ message: `New time zone (${fmtOffset(change.to)}). Today and your streak are safe.`, duration: 6000 });
+      }
+    };
+    void check();
+    document.addEventListener('visibilitychange', check);
+    return () => document.removeEventListener('visibilitychange', check);
+  }, [toast]);
+
+  // Check-in streak milestones (7, 14, 30, ...) get their own celebration, once each.
+  const streak = state?.dashboard.streak.current ?? 0;
+  useEffect(() => {
+    if (!state) return;
+    void streakMilestoneReached(streak).then((m) => {
+      if (m) celebrate({ kind: 'milestone', burner: 'family', title: `${m}-day streak`, subtitle: 'The fire keeps burning' });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [streak, !!state]);
+
   if (!state) return <div className="h-full bg-black" />;
 
   const isBurner = route.name === 'burner' && (BURNERS as readonly string[]).includes(route.burner);
   let screen: React.ReactNode;
-  if (isBurner) {
-    screen = <BurnerScreen state={state} burner={(route as { burner: BurnerId }).burner} />;
-  } else if (route.name === 'settings') {
-    screen = <SettingsScreen state={state} />;
-  } else {
-    screen = <Home state={state} />;
+  switch (route.name) {
+    case 'burner':
+      screen = isBurner ? <BurnerScreen state={state} burner={route.burner as BurnerId} /> : <Home state={state} />;
+      break;
+    case 'settings':
+      screen = <SettingsScreen state={state} />;
+      break;
+    case 'review':
+      screen = <ReviewScreen state={state} />;
+      break;
+    case 'reel':
+      screen = <ReelScreen state={state} quarterId={route.quarterId} closing={route.closing} />;
+      break;
+    case 'close':
+      screen = <CloseScreen state={state} quarterId={route.quarterId} />;
+      break;
+    case 'setup':
+      screen = <SetupScreen state={state} quarterId={route.quarterId} />;
+      break;
+    case 'archive':
+      screen = <ArchiveScreen state={state} quarterId={route.quarterId} />;
+      break;
+    default:
+      screen = <Home state={state} />;
   }
 
   const heat = Object.fromEntries(BURNERS.map((b) => [b, state.dashboard.burners[b].heat * state.dashboard.burners[b].brightness])) as Record<BurnerId, number>;
@@ -106,4 +154,10 @@ function Shell() {
       <Celebrations />
     </>
   );
+}
+
+function fmtOffset(min: number): string {
+  const sign = min >= 0 ? '+' : '-';
+  const a = Math.abs(min);
+  return `UTC${sign}${Math.floor(a / 60)}${a % 60 ? `:${String(a % 60).padStart(2, '0')}` : ''}`;
 }

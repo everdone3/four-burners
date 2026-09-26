@@ -1,6 +1,6 @@
 // Small shared UI pieces.
 import { AnimatePresence, motion } from 'motion/react';
-import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
+import { createContext, useCallback, useContext, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { useReducedMotion, spring } from '../motion';
 
 // ---------- Bottom sheet ----------
@@ -179,6 +179,8 @@ export function Segmented<T extends string>({
   onChange: (v: T) => void;
   disabled?: boolean;
 }) {
+  // Unique per instance, so several selectors on one screen each animate their own highlight.
+  const uid = useId();
   return (
     <div className="flex rounded-2xl border border-line bg-raised p-1" role="radiogroup">
       {options.map((o) => {
@@ -193,7 +195,7 @@ export function Segmented<T extends string>({
             onClick={() => onChange(o.value)}
             className={`relative min-h-11 flex-1 rounded-xl px-2 text-[15px] font-medium transition disabled:opacity-35 ${active ? 'text-black' : 'text-dim'}`}
           >
-            {active && <motion.span layoutId={`seg-${options.map((x) => x.value).join()}`} className="absolute inset-0 rounded-xl bg-white" transition={spring} />}
+            {active && <motion.span layoutId={`seg-${uid}`} className="absolute inset-0 rounded-xl bg-white" transition={spring} />}
             <span className="relative">{o.label}</span>
           </button>
         );
