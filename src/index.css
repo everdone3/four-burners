@@ -1,0 +1,64 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-ink: #000000;
+  --color-surface: #0c0c0e;
+  --color-raised: #16161a;
+  --color-line: rgb(255 255 255 / 0.09);
+  --color-dim: #a8a8b3;
+  --color-faint: #71717a;
+  --color-ember: #ffae3b;
+  --color-family: #ffae3b;
+  --color-friends: #ff7aa2;
+  --color-health: #5ad1ff;
+  --color-work: #b58cff;
+  --font-sans: -apple-system, BlinkMacSystemFont, 'SF Pro Text', 'Segoe UI', Roboto, sans-serif;
+  --font-display: ui-rounded, -apple-system, 'SF Pro Rounded', 'Segoe UI', sans-serif;
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+    background: #000;
+    color: #fff;
+  }
+  body {
+    font-family: var(--font-sans);
+    -webkit-font-smoothing: antialiased;
+    -webkit-tap-highlight-color: transparent;
+    overscroll-behavior: none;
+    touch-action: manipulation;
+  }
+  button {
+    cursor: pointer;
+  }
+  /* 16px minimum prevents iOS from zooming into inputs. Standard inputs keep dictation working. */
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+@utility pt-safe {
+  padding-top: max(env(safe-area-inset-top), 12px);
+}
+@utility pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom), 16px);
+}
+@utility px-safe {
+  padding-left: max(env(safe-area-inset-left), 20px);
+  padding-right: max(env(safe-area-inset-right), 20px);
+}
+@utility tabular {
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes flicker {
+  0%, 100% { transform: scale(1, 1); opacity: 0.95; }
+  25% { transform: scale(0.97, 1.04); opacity: 1; }
+  50% { transform: scale(1.02, 0.97); opacity: 0.9; }
+  75% { transform: scale(0.98, 1.02); opacity: 1; }
+}
