@@ -4,6 +4,7 @@ import type { AppState } from '@/data/hooks';
 import { saveSettings, wipeAll } from '@/data/repo';
 import { hasSampleData, loadSampleData, wipeSampleData } from '@/data/sample';
 import { GhostButton, useToast } from '../components/ui';
+import { SensitiveTermsEditor } from '../components/Sensitive';
 import { goBack, navigate } from '../router';
 import { clockOffsetMs, setClockOffset, travelTo } from '@/data/clock';
 import { addDays, quarterSpan, weekday } from '@/domain';
@@ -32,6 +33,9 @@ export function SettingsScreen({ state }: { state: AppState }) {
 
       <Section title="Rituals">
         <div className="flex flex-col gap-2.5">
+          <GhostButton onClick={() => navigate('about')}>About me (what your coach knows)</GhostButton>
+          <GhostButton onClick={() => navigate('checkin')}>Coach check-in</GhostButton>
+          <GhostButton onClick={() => navigate('coach')}>Coach history</GhostButton>
           <GhostButton onClick={() => navigate('review')}>Open weekly review</GhostButton>
           <GhostButton onClick={() => navigate('archive')}>Past quarters and highlights</GhostButton>
           {state.quarter.status === 'active' && !state.pendingClose && (
@@ -53,6 +57,10 @@ export function SettingsScreen({ state }: { state: AppState }) {
             </select>
           </Row>
         </div>
+      </Section>
+
+      <Section title="Work confidentiality">
+        <SensitiveTermsEditor terms={state.settings.sensitiveTerms} />
       </Section>
 
       <Section title="Your day">

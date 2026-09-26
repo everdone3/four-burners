@@ -1,6 +1,6 @@
 // Guided quarter setup: theme, intents (High cap), goals (pre-filled with carried goals), then ignition.
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   BURNERS,
   BURNER_LABELS,
@@ -8,6 +8,7 @@ import {
   INTENT_LABELS,
   MAX_HIGH_BURNERS,
   countHigh,
+  prevQuarterId,
   quarterLabel,
   quarterSpan,
   type BurnerId,
@@ -15,7 +16,7 @@ import {
   type Intent,
 } from '@/domain';
 import type { AppState } from '@/data/hooks';
-import { ensureCurrentQuarter, finishSetup, setSetupIntents, setTheme } from '@/data/repo';
+import { ensureQuarter, finishSetup, setSetupIntents, setTheme } from "@/data/repo";
 import { Flame } from '../components/Flame';
 import { MiniFlame, MoltenButton, ShimmerText, StepEmbers } from '../components/sizzle';
 import { GhostButton, Segmented, inputClass } from '../components/ui';
@@ -25,9 +26,12 @@ import { navigate } from '../router';
 import { PALETTES } from '../theme';
 import { fmtDay } from '../stateInput';
 import { GoalEditor } from './GoalEditor';
+import { CoachPanel } from '../components/CoachPanel';
+import { buildQuarterSetupPacket } from '@/domain/coach/packets';
+import { highlightsInputFor } from '../stateInput';
 import { useReducedMotion } from '../motion';
 
-const STEPS = ['Theme', 'Intents', 'Goals', 'Ignite'] as const;
+const STEPS = ['Theme', 'Intents', 'Goals', 'Pressure test', 'Ignite'] as const;
 const THEME_IDEAS = ['Present', 'Foundations', 'Less but better', 'Strong', 'All in', 'Reset', 'Momentum'];
 const stepKey = (q: string) => `fb-setup-step-${q}`;
 
@@ -35,8 +39,8 @@ export function SetupScreen({ state, quarterId }: { state: AppState; quarterId: 
   const quarter = state.quarters.find((q) => q.id === quarterId);
   // The next quarter may not exist yet (setup opened ahead of time); create it on the fly.
   useEffect(() => {
-    if (!quarter && quarterId === state.quarter.id) void ensureCurrentQuarter();
-  }, [quarter, quarterId, state.quarter.id]);
+    if (!quarter) void ensureQuarter(quarterId);
+  }, [quarter, quarterId]);
   if (!quarter) return <div className="grid h-dvh place-items-center text-dim">Preparing {quarterLabel(quarterId)}...</div>;
   return <SetupFlow state={state} quarterId={quarterId} />;
 }
@@ -87,9 +91,10 @@ function SetupFlow({ state, quarterId }: { state: AppState; quarterId: string })
           transition={{ duration: 0.25 }}
         >
           {step === 0 && <ThemeStep quarterId={quarterId} theme={quarter.theme} />}
-          {step === 1 && <IntentsStep quarterId={quarterId} intents={quarter.intents} />}
+          {step === 1 && <IntentsStep quarterId={quarterId} intents={quarter.intents} words={state.profile?.burners} />}
           {step === 2 && <GoalsStep state={state} quarterId={quarterId} goals={goals} intents={quarter.intents} />}
-          {step === 3 && <IgniteStep quarterId={quarterId} goals={goals} intents={quarter.intents} theme={quarter.theme} />}
+          {step === 3 && <PressureTestStep state={state} quarterId={quarterId} goals={goals} />}
+          {step === 4 && <IgniteStep quarterId={quarterId} goals={goals} intents={quarter.intents} theme={quarter.theme} />}
         </motion.div>
       </AnimatePresence>
 
@@ -152,7 +157,7 @@ function ThemeStep({ quarterId, theme }: { quarterId: string; theme?: string }) 
   );
 }
 
-function IntentsStep({ quarterId, intents }: { quarterId: string; intents: Record<BurnerId, Intent> }) {
+function IntentsStep({ quarterId, intents, words }: { quarterId: string; intents: Record<BurnerId, Intent>; words?: Record<BurnerId, { winning: string }> }) {
   const highs = countHigh(intents);
   const [error, setError] = useState('');
   return (
@@ -172,6 +177,7 @@ function IntentsStep({ quarterId, intents }: { quarterId: string; intents: Recor
                   {BURNER_LABELS[b]}
                 </span>
               </div>
+              {words?.[b]?.winning && <p className="-mt-1 mb-3 text-[14px] text-dim"><span className="font-semibold text-white/70">Your words: </span>{words[b].winning}</p>}
               <Segmented
                 value={intents[b]}
                 onChange={async (i: Intent) => {
@@ -224,6 +230,7 @@ function GoalsStep({ state, quarterId, goals, intents }: { state: AppState; quar
                   {mine.length}/{GOAL_LIMITS.max}
                 </span>
               </div>
+              {state.profile?.burners[b]?.winning && <p className="mb-2 text-[13px] text-dim"><span className="font-semibold text-white/70">Your words: </span>{state.profile.burners[b].winning}</p>}
               <div className="space-y-2">
                 {mine.map((g) => {
                   const tweak = decisionOf(g) === 'modify';
@@ -305,6 +312,40 @@ function IgniteStep({ quarterId, goals, intents, theme }: { quarterId: string; g
           );
         })}
       </div>
+    </div>
+  );
+}
+
+function PressureTestStep({ state, quarterId, goals }: { state: AppState; quarterId: string; goals: Goal[] }) {
+  const quarter = state.quarters.find((q) => q.id === quarterId)!;
+  const prevId = prevQuarterId(quarterId);
+  const previous = state.quarters.some((q) => q.id === prevId && state.data.allGoals.some((g) => g.quarterId === prevId)) ? highlightsInputFor(state, prevId) : null;
+  const packet = useMemo(
+    () =>
+      buildQuarterSetupPacket({
+        draftQuarter: quarter,
+        draftGoals: goals,
+        previous,
+        quarters: state.quarters,
+        crunch: state.data.crunch,
+        logs: state.data.logs,
+        goalsAll: state.data.allGoals,
+        reviews: state.data.reviews,
+        settings: state.settings,
+        profile: state.profile,
+        today: state.today,
+      }),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [quarter, goals, state.data, state.settings, state.profile, state.today],
+  );
+  return (
+    <div>
+      <div className="mt-1 text-[12px] font-bold tracking-[0.22em] text-ember uppercase">Optional</div>
+      <h1 className="font-display text-[40px] leading-tight font-black">Pressure test</h1>
+      <p className="mt-2 mb-5 text-[16px] text-dim">
+        Before you commit, let your Claude coach flag vague goals, missing whys or plans, and over-commitment given your travel and crunch history. Make changes back in Goals.
+      </p>
+      <CoachPanel kind="quarter_setup" scope={quarterId} packet={packet} replies={state.data.replies} />
     </div>
   );
 }

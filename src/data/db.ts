@@ -11,6 +11,8 @@ import type {
   Touchpoint,
   WeeklyAction,
   WeeklyReview,
+  Profile,
+  CoachReply,
 } from "@/domain";
 
 export interface KV {
@@ -29,6 +31,8 @@ export class FourBurnersDB extends Dexie {
   crunch!: EntityTable<CrunchPeriod, "id">;
   reviews!: EntityTable<WeeklyReview, "id">;
   actions!: EntityTable<WeeklyAction, "id">;
+  profiles!: EntityTable<Profile, "id">;
+  coachReplies!: EntityTable<CoachReply, "id">;
   kv!: EntityTable<KV, 'key'>;
 
   constructor(name = 'four-burners') {
@@ -48,6 +52,11 @@ export class FourBurnersDB extends Dexie {
     this.version(2).stores({
       reviews: 'id, weekStart, updatedAt',
       actions: 'id, weekStart, updatedAt',
+    });
+    // v3: the About me profile and saved coach replies.
+    this.version(3).stores({
+      profiles: "id, updatedAt",
+      coachReplies: "id, kind, scope, updatedAt",
     });
   }
 }

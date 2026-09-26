@@ -175,6 +175,14 @@ function QuarterDetail({ state, quarterId }: { state: AppState; quarterId: strin
                       {m}
                     </div>
                   ))}
+                  {state.data.replies
+                    .filter((c) => c.kind === 'weekly' && c.scope === r.weekStart)
+                    .map((c) => (
+                      <div key={c.id} className="mt-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-3">
+                        <div className="mb-1 text-[11px] font-bold tracking-[0.16em] text-ember uppercase">Coach</div>
+                        <p className="text-[14px] leading-relaxed whitespace-pre-wrap text-white/80">{c.text}</p>
+                      </div>
+                    ))}
                 </div>
               </details>
             ))}

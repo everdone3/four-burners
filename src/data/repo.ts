@@ -2,6 +2,7 @@
 import {
   DEFAULT_INTENTS,
   DEFAULT_SETTINGS,
+  EMPTY_PROFILE_FIELDS,
   applyLogEdit,
   canSetIntent,
   carryForward,
@@ -16,6 +17,7 @@ import {
   validateIntents,
   type BurnerId,
   type CloseDecision,
+  type CoachReply,
   type EnergyEntry,
   type Goal,
   type Grade,
@@ -24,6 +26,8 @@ import {
   type LogEntry,
   type LogPatch,
   type Person,
+  type Profile,
+  type ProfileFields,
   type Quarter,
   type QuarterId,
   type QuarterSummary,
@@ -66,6 +70,16 @@ export async function ensureCurrentQuarter(): Promise<Quarter> {
     intentHistory: [],
     status: 'active',
   };
+  await db.quarters.put(q);
+  return q;
+}
+
+/** Create a quarter record (default intents) if it does not exist yet, e.g. setting up next quarter early. */
+export async function ensureQuarter(id: QuarterId): Promise<Quarter> {
+  const existing = await db.quarters.get(id);
+  if (existing) return existing;
+  const t = nowIso();
+  const q: Quarter = { id, createdAt: t, updatedAt: t, intents: { ...DEFAULT_INTENTS }, intentHistory: [], status: "active" };
   await db.quarters.put(q);
   return q;
 }
@@ -472,4 +486,102 @@ export async function streakMilestoneReached(streak: number): Promise<number | n
   // The first check just records where you are. Only a milestone crossed in the last couple of days
   // celebrates, so jumps (loading data, syncing another device) stay quiet.
   return last >= 0 && hit > last && streak - hit <= 2 ? hit : null;
+}
+
+// ---------- About me profile ----------
+
+export async function getProfile(): Promise<Profile | undefined> {
+  const p = await db.profiles.get('me');
+  return p && !p.deleted ? p : undefined;
+}
+
+function fieldsOf(p: ProfileFields): ProfileFields {
+  return {
+    lifeContext: p.lifeContext,
+    burners: {
+      family: { ...p.burners.family },
+      friends: { ...p.burners.friends },
+      health: { ...p.burners.health },
+      work: { ...p.burners.work },
+    },
+    travel: p.travel,
+    crunch: p.crunch,
+  };
+}
+
+/**
+ * Save the About me profile. `snapshot` keeps a copy of the previous fields (used before a coach
+ * replace or an interview re-run) so "Restore previous version" can undo it.
+ */
+export async function saveProfile(
+  fields: ProfileFields,
+  source: Profile['source'],
+  opts: { snapshot?: boolean; onboarded?: boolean } = {},
+): Promise<Profile> {
+  const t = nowIso();
+  const existing = await db.profiles.get('me');
+  const next: Profile = {
+    id: 'me',
+    createdAt: existing?.createdAt ?? t,
+    updatedAt: t,
+    ...fieldsOf(fields),
+    source,
+    previous: opts.snapshot && existing && !existing.deleted ? fieldsOf(existing) : existing?.previous,
+    onboardedAt: opts.onboarded ? existing?.onboardedAt ?? t : existing?.onboardedAt,
+  };
+  await db.profiles.put(next);
+  return next;
+}
+
+export async function restorePreviousProfile(): Promise<boolean> {
+  const existing = await db.profiles.get('me');
+  if (!existing?.previous) return false;
+  const t = nowIso();
+  await db.profiles.put({ ...existing, ...fieldsOf(existing.previous), previous: fieldsOf(existing), source: 'edited', updatedAt: t });
+  return true;
+}
+
+// ---------- Onboarding interview progress ----------
+
+const ONBOARDING_KEY = 'onboarding';
+
+export interface OnboardingProgress {
+  step: number;
+  draft: ProfileFields;
+  /** Quarter chosen for the first setup. */
+  quarterId?: QuarterId;
+  completedAt?: string;
+  /** Set when "Later" is tapped, so first launch stops auto-opening the interview. */
+  dismissedAt?: string;
+}
+
+export async function getOnboarding(): Promise<OnboardingProgress | undefined> {
+  return (await db.kv.get(ONBOARDING_KEY))?.value as OnboardingProgress | undefined;
+}
+
+export async function saveOnboarding(patch: Partial<OnboardingProgress>): Promise<void> {
+  const cur = (await getOnboarding()) ?? { step: 0, draft: EMPTY_PROFILE_FIELDS };
+  await db.kv.put({ key: ONBOARDING_KEY, value: { ...cur, ...patch }, updatedAt: nowIso() });
+}
+
+// ---------- Coach replies ----------
+
+export async function saveCoachReply(input: Pick<CoachReply, 'kind' | 'scope' | 'text' | 'actions'> & { packetChars?: number }): Promise<CoachReply> {
+  const t = nowIso();
+  const reply: CoachReply = { id: newId(), createdAt: t, updatedAt: t, ...input, addedActions: [] };
+  await db.coachReplies.put(reply);
+  return reply;
+}
+
+export async function deleteCoachReply(id: string): Promise<void> {
+  await db.coachReplies.update(id, { deleted: true, updatedAt: nowIso() });
+}
+
+/** Turn one suggested action from a coach reply into a weekly action (one tap each). */
+export async function addActionFromReply(replyId: string, text: string, weekStart: LocalDate, burner?: BurnerId): Promise<void> {
+  const reply = await db.coachReplies.get(replyId);
+  if (!reply) return;
+  if (reply.addedActions?.includes(text)) return;
+  await addAction(weekStart, text, burner);
+  await db.coachReplies.update(replyId, { addedActions: [...(reply.addedActions ?? []), text], updatedAt: nowIso() });
 }

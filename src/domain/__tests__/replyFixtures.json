@@ -1,0 +1,211 @@
+[
+ {
+  "name": "Well-formatted, exactly per instruction [burners: family, health, work]",
+  "reply": "Solid week given two days in Denver. Health held at Steady and you kept the check-in streak alive at 9 days, which matters more than any single run.\n\nFamily is the one slipping. You wrote that date night is how you stay a team, not just a night out. One dinner at home out of four is a signal, not a failure.\n\nSuggested actions:\n- Family: Book the sitter for Friday date night\n- Health: Run Tuesday and Thursday before the office\n- Work: Block 8 to 10 on Monday for pipeline thinking",
+  "expected": [
+   "Book the sitter for Friday date night",
+   "Run Tuesday and Thursday before the office",
+   "Block 8 to 10 on Monday for pipeline thinking"
+  ]
+ },
+ {
+  "name": "Markdown bold heading with trailing colon, untagged items with trailing periods [burners: none, none, none]",
+  "reply": "You did the hard part this week: you noticed the phone-in-bed pattern before it cost you a full week of sleep. Lights out held four nights.\n\nFriends is Low this quarter, so a quiet week there is fine. No guilt.\n\n**Suggested actions:**\n- Charge the phone in the kitchen every night.\n- Lights out by 10:30 Sunday through Thursday.\n- Send Jake a two-line text about golf in October.",
+  "expected": [
+   "Charge the phone in the kitchen every night",
+   "Lights out by 10:30 Sunday through Thursday",
+   "Send Jake a two-line text about golf in October"
+  ]
+ },
+ {
+  "name": "H3 'Next steps' heading, numbered list with bold lead phrases and rationale [burners: none, none, none]",
+  "reply": "Travel ate Wednesday through Friday, and you still logged three days. That's the floor holding, which is exactly what Crunch weeks are for.\n\n### Next steps\n1. **Book the sitter for Friday.** Date night slipped twice, and it's your Family why in action.\n2. **Protect Tuesday mornings:** block 8 to 10 before the office.\n3. **Call your mom on Sunday.** Ten minutes counts.",
+  "expected": [
+   "Book the sitter for Friday",
+   "Protect Tuesday mornings: block 8 to 10 before the office",
+   "Call your mom on Sunday"
+  ]
+ },
+ {
+  "name": "Heading 'Try this week:' with 1) numbering [burners: none, none, none]",
+  "reply": "Honest read: Work took everything this week, and that was a choice you made on purpose. The cost showed up in energy, which dipped to 2 by Thursday.\n\nTry this week:\n1) Take a 20 minute walk after lunch on Tuesday and Thursday\n2) Leave the laptop in the bag on Saturday\n3) Ask Priya and Sam to dinner next weekend",
+  "expected": [
+   "Take a 20 minute walk after lunch on Tuesday and Thursday",
+   "Leave the laptop in the bag on Saturday",
+   "Ask Priya and Sam to dinner next weekend"
+  ]
+ },
+ {
+  "name": "No heading, loose list (blank lines between items) at the end, fallback [burners: none, none, none]",
+  "reply": "Good week. You hit 4 of 5 check-ins and Health is ahead of pace for the first time this quarter.\n\nThe one thing I'd watch is Sunday nights. Three of your last four Sundays show late work and a low Monday energy score.\n\n- Shut the laptop by 8 on Sunday\n\n- Plan Monday's top three on Friday afternoon instead\n\n- Keep the Saturday long run, even if it's short",
+  "expected": [
+   "Shut the laptop by 8 on Sunday",
+   "Plan Monday's top three on Friday afternoon instead",
+   "Keep the Saturday long run, even if it's short"
+  ]
+ },
+ {
+  "name": "Heading with parenthetical, closing sentence directly after the list with no blank line [burners: health, family, work]",
+  "reply": "You're carrying a lot right now, and it shows: three late nights and energy at 2 on Thursday. Here's where I'd put your limited fuel.\n\nSuggested actions (pick two):\n- Health: Two short runs instead of three long ones\n- Family: Be home for dinner Tuesday and Thursday\n- Work: Leave the laptop at the office one night\nThat's it. Deal weeks end, and the habits you protect now are the ones still standing when this one closes.\n\nProud of how you handled Denver.",
+  "expected": [
+   "Two short runs instead of three long ones",
+   "Be home for dinner Tuesday and Thursday",
+   "Leave the laptop at the office one night"
+  ]
+ },
+ {
+  "name": "Nested bullets grouped under bold burner labels, plus an elaboration grandchild that is dropped [burners: family, family, health]",
+  "reply": "Three burners got attention and one got nothing, which is fine because Friends is Low. The real gap is Family, where your why is being present at dinner.\n\nSuggested actions:\n- **Family**\n  - Home by 6:30 on Tuesday and Thursday\n  - Phone stays in the car during dinner\n- **Health**\n  - Three runs: Tue, Thu, Sat\n    - Keep Saturday easy, it's your recovery run",
+  "expected": [
+   "Home by 6:30 on Tuesday and Thursday",
+   "Phone stays in the car during dinner",
+   "Three runs: Tue, Thu, Sat"
+  ]
+ },
+ {
+  "name": "Nested bullets: parent ending in a colon is dropped and its children move up, elaboration child is dropped [burners: health, health, none]",
+  "reply": "Health is the burner to rescue, and you told me why: you want energy for the kids after work, not just on weekends.\n\nSuggested actions:\n- Pick one of these for Health:\n  - Run Tuesday before the office\n  - Stretch for 10 minutes after landing\n- Call Mom on Sunday\n  - She mentioned the garden, so ask about it",
+  "expected": [
+   "Run Tuesday before the office",
+   "Stretch for 10 minutes after landing",
+   "Call Mom on Sunday"
+  ]
+ },
+ {
+  "name": "Checkbox list under weak heading 'Next week:', including a pre-checked box [burners: health, friends, family]",
+  "reply": "Quick one this week since you're in the air most of it.\n\nNext week:\n- [ ] Health: Walk 20 minutes in the hotel gym on travel days\n- [ ] Friends: Text Jake from the airport\n- [x] Family: FaceTime the kids before bedtime on Wednesday",
+  "expected": [
+   "Walk 20 minutes in the hotel gym on travel days",
+   "Text Jake from the airport",
+   "FaceTime the kids before bedtime on Wednesday"
+  ]
+ },
+ {
+  "name": "Two lists: tagged observations first, actions last under a non-keyword lead-in, fallback picks the last [burners: none, none]",
+  "reply": "Here's what the week says.\n\nWhat I see in the numbers:\n- Health: 3 of 4 runs, ahead of pace\n- Work: 5 late nights, energy down to 2\n- Family: 1 dinner at home out of 4\n\nKeep it small:\n- Home for dinner Tuesday and Thursday\n- Lights out by 10:30 on weeknights\n\nYou know how to do this. You did it in August.",
+  "expected": [
+   "Home for dinner Tuesday and Thursday",
+   "Lights out by 10:30 on weeknights"
+  ]
+ },
+ {
+  "name": "Question list and no actions (expect empty)",
+  "reply": "Before I suggest anything, I want to understand the week better. Energy sat at 2 for three days, but there's no travel logged.\n\nA few questions:\n- What was draining you on Tuesday and Wednesday?\n- Was the missed run a schedule problem or a motivation problem?\n- Is Family still the burner you want on High this quarter?\n\nAnswer whichever feel useful and I'll turn it into a plan.",
+  "expected": []
+ },
+ {
+  "name": "Very short reply with a bare 'Actions:' heading [burners: none, none]",
+  "reply": "Rest week. You earned it.\n\nActions:\n- Sleep in Saturday\n- Call Mom",
+  "expected": [
+   "Sleep in Saturday",
+   "Call Mom"
+  ]
+ },
+ {
+  "name": "Very short reply with an inline heading and semicolon-separated actions [burners: none, none]",
+  "reply": "Short and sweet this week.\nSuggested actions: call Mom Sunday; run Tuesday before work.",
+  "expected": [
+   "Call Mom Sunday",
+   "Run Tuesday before work"
+  ]
+ },
+ {
+  "name": "Very short reply with no list at all (expect empty)",
+  "reply": "Nice work. Same plan as last week, it's working.",
+  "expected": []
+ },
+ {
+  "name": "Emoji bullets under 'For next week:'; the single emoji-led opening line is prose [burners: none, none, none]",
+  "reply": "🔥 Big week. All four burners lit, and Work stayed at Steady like you planned, even with the Chicago trip.\n\nFor next week:\n👉 Book the sitter for Friday\n🏃 Two runs before 7 am on Tuesday and Thursday\n📞 Call Jake on the drive home Wednesday",
+  "expected": [
+   "Book the sitter for Friday",
+   "Two runs before 7 am on Tuesday and Thursday",
+   "Call Jake on the drive home Wednesday"
+  ]
+ },
+ {
+  "name": "Rendered-text copy: plain heading with no colon, bullet glyphs followed by NBSP, sub-bullet glyph with no indentation (dropped) [burners: family, health, work]",
+  "reply": "Health is ahead and Family is behind, and you already know why: the Denver trip.\n\nSuggested actions\n• Family: Dinner at home Tuesday and Thursday\n◦ Tell the team you're offline from 6 to 8\n• Health: Keep the Saturday long run\n• Work: Decline one recurring meeting that doesn't need you",
+  "expected": [
+   "Dinner at home Tuesday and Thursday",
+   "Keep the Saturday long run",
+   "Decline one recurring meeting that doesn't need you"
+  ]
+ },
+ {
+  "name": "Windows CRLF line endings, bold 'Next steps:' heading, asterisk bullets [burners: health, family, friends]",
+  "reply": "You logged every day this week, even the red-eye day. That consistency is the whole game.\r\n\r\n**Next steps:**\r\n* Health: Stretch 10 minutes after landing\r\n* Family: Plan Saturday morning with the kids\r\n* Friends: Invite Priya and Sam to dinner on the 18th\r\n",
+  "expected": [
+   "Stretch 10 minutes after landing",
+   "Plan Saturday morning with the kids",
+   "Invite Priya and Sam to dinner on the 18th"
+  ]
+ },
+ {
+  "name": "Heading with 'this week' (markdown H2), numbered, actions containing colons and a clock time [burners: health, health, work]",
+  "reply": "Candidly, Health is slipping and you know it: 2 runs in 3 weeks against a High intent. You said you want to be the dad who can still keep up at 60. That's the why. Let's make starting again easy.\n\n## This week's focus\n1. Health: Three runs: Tue, Thu, Sat\n2. Health: Lights out by 10:30, phone in the kitchen\n3. Work: Calendar rule: nothing before 9 on run days",
+  "expected": [
+   "Three runs: Tue, Thu, Sat",
+   "Lights out by 10:30, phone in the kitchen",
+   "Calendar rule: nothing before 9 on run days"
+  ]
+ },
+ {
+  "name": "The only fixture with em dashes (U+2014): spaced and unspaced em dashes inside actions are CONVERTED to ', ' (comma plus space), never kept [burners: family, health, work]",
+  "reply": "Good week — really good. You protected three of four mornings, and your energy shows it.\n\nThe one soft spot is Family. You said dinner at home is how you stay close to the kids — two out of five nights won't get you there.\n\nSuggested actions:\n- Family: Home for dinner Tuesday and Thursday — phone stays in the car\n- Health: Keep the Saturday long run—even a short one counts\n- Work: Block 8 to 10 on Monday — no meetings",
+  "expected": [
+   "Home for dinner Tuesday and Thursday, phone stays in the car",
+   "Keep the Saturday long run, even a short one counts",
+   "Block 8 to 10 on Monday, no meetings"
+  ]
+ },
+ {
+  "name": "Actions heading mid-reply, then a question list at the end (strong heading beats the last list) [burners: family, health]",
+  "reply": "You're right that Work crowded everything out. That was a deliberate trade for a big week, and it's fine as long as it ends.\n\nSuggested actions:\n- Family: Sunday pancakes with the kids, no phone\n- Health: 30 minute walk on Tuesday and Thursday\n\nTwo questions to think about:\n- When does this crunch actually end?\n- What would make Friday a real stop?",
+  "expected": [
+   "Sunday pancakes with the kids, no phone",
+   "30 minute walk on Tuesday and Thursday"
+  ]
+ },
+ {
+  "name": "Partial paste that starts mid-word, list only, no heading (fallback) [burners: health, friends, family]",
+  "reply": "ing is the pattern to break.\n\n- Health: Walk after lunch on Tuesday\n- Friends: Reply to Sam's text about the lake house\n- Family: Read with Emma on Wednesday night",
+  "expected": [
+   "Walk after lunch on Tuesday",
+   "Reply to Sam's text about the lake house",
+   "Read with Emma on Wednesday night"
+  ]
+ },
+ {
+  "name": "Heading and list wrapped in a code fence to make them easy to copy [burners: family, health]",
+  "reply": "Here's the list so it's easy to copy back:\n\n```\nSuggested actions:\n- Family: Call Mom on Sunday\n- Health: Run Tuesday and Thursday before the office\n```\n\nYou've got this.",
+  "expected": [
+   "Call Mom on Sunday",
+   "Run Tuesday and Thursday before the office"
+  ]
+ },
+ {
+  "name": "More than 5 items: one long item with rationale, one case-insensitive duplicate (trim, dedupe, then cap at 5) [burners: none, none, none, none, none]",
+  "reply": "You asked for a longer menu this time, so here it is. Pick what fits the week.\n\nSuggested actions:\n1. Book the sitter for Friday\n2. Run Tuesday and Thursday before the office. Mornings are the only time that survives a travel week, and the loop around the reservoir only takes 35 minutes.\n3. Call Mom on Sunday\n4. book the sitter for Friday.\n5. Text Jake about golf\n6. Inbox to zero by Friday noon\n7. Lights out by 10:30 on weeknights",
+  "expected": [
+   "Book the sitter for Friday",
+   "Run Tuesday and Thursday before the office",
+   "Call Mom on Sunday",
+   "Text Jake about golf",
+   "Inbox to zero by Friday noon"
+  ]
+ },
+ {
+  "name": "Partial paste of only an observations list, pronoun-led (fallback rejects it, expect empty)",
+  "reply": "You did better than it feels:\n- You checked in 6 of 7 days\n- Your energy averaged 3.8, up from 3.1\n- The Friday dinner happened even with the late flight",
+  "expected": []
+ },
+ {
+  "name": "Whole chat copied, so the packet (instruction line plus last week's planned actions) appears above the reply; works with or without the packet end sentinel [burners: friends, health]",
+  "reply": "Coaching instructions: be candid, warm, and brief. End your reply with a line that says exactly \"Suggested actions:\" and then 2 or 3 lines, each starting with \"- \" plus a burner name (Family, Friends, Health, or Work) and a colon.\n\nPlanned last week (2 of 3 done):\n- [x] Call Mom on Sunday\n- [ ] Text Jake about golf\n- [x] Meal prep Sunday\n\nSteady week. Two of three planned actions done, and the one you skipped is on your Low burner, which is fine.\n\nSuggested actions:\n- Friends: Text Jake about golf on Monday\n- Health: Meal prep Sunday for the travel days",
+  "expected": [
+   "Text Jake about golf on Monday",
+   "Meal prep Sunday for the travel days"
+  ]
+ }
+]

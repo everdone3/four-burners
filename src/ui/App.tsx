@@ -10,6 +10,13 @@ import { ReelScreen } from './screens/Reel';
 import { CloseScreen } from './screens/Close';
 import { SetupScreen } from './screens/Setup';
 import { ArchiveScreen } from './screens/Archive';
+import { CheckInScreen } from './screens/CheckIn';
+import { OnboardingScreen } from './screens/Onboarding';
+import { AboutScreen } from './screens/About';
+import { CoachHistoryScreen } from './screens/CoachHistory';
+import { PendingCoachBanner } from "./components/CoachPanel";
+import { navigate } from './router';
+import { getOnboarding } from '@/data/repo';
 import { MoltenButton } from './components/sizzle';
 import { NotePromptProvider } from "./components/NotePrompt";
 import { Atmosphere } from './fx/Atmosphere';
@@ -78,6 +85,16 @@ function Shell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [streak, !!state]);
 
+  // First launch on a fresh install (no profile, no goals, no people): start the onboarding interview.
+  const fresh = !!state && !state.profile && state.data.allGoals.length === 0 && state.data.people.length === 0;
+  useEffect(() => {
+    if (!fresh || route.name !== 'home') return;
+    void getOnboarding().then((o) => {
+      if (!o?.completedAt && !o?.dismissedAt) navigate('onboarding', { replace: true });
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fresh]);
+
   if (!state) return <div className="h-full bg-black" />;
 
   const isBurner = route.name === 'burner' && (BURNERS as readonly string[]).includes(route.burner);
@@ -103,6 +120,18 @@ function Shell() {
       break;
     case 'archive':
       screen = <ArchiveScreen state={state} quarterId={route.quarterId} />;
+      break;
+    case 'checkin':
+      screen = <CheckInScreen state={state} />;
+      break;
+    case 'onboarding':
+      screen = <OnboardingScreen state={state} />;
+      break;
+    case 'about':
+      screen = <AboutScreen state={state} />;
+      break;
+    case 'coach':
+      screen = <CoachHistoryScreen state={state} />;
       break;
     default:
       screen = <Home state={state} />;
@@ -151,6 +180,7 @@ function Shell() {
 
         <LogSheet open={logOpen} onClose={() => setLogOpen(false)} state={state} />
       </div>
+      <PendingCoachBanner routeName={route.name} />
       <Celebrations />
     </>
   );

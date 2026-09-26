@@ -26,9 +26,10 @@ import {
   type Settings,
   type Touchpoint,
   type TouchpointType,
+  type CoachReply,
   type WeeklyAction,
   type WeeklyReview,
-} from '@/domain';
+} from "@/domain";
 import { db } from './db';
 import { currentToday, getSettings } from './repo';
 
@@ -290,7 +291,7 @@ export async function loadSampleData(): Promise<void> {
   const settings = await getSettings();
   closeSampleQuarter(prev, cur, people, settings);
   // Weekly reviews (wins, misses, focus) and the actions they created, including this week's.
-  const { reviews, actions } = sampleRituals(quarterSpan(previous).start, today, [...prev.crunch, ...cur.crunch]);
+  const { reviews, actions, replies } = sampleRituals(quarterSpan(previous).start, today, [...prev.crunch, ...cur.crunch]);
 
   // Quarters with real goals are left alone; empty ones (e.g. auto-created) get the sample setup.
   const realGoals = await db.goals.filter((g) => !g.id.startsWith('sample-') && !g.deleted).toArray();
@@ -310,6 +311,7 @@ export async function loadSampleData(): Promise<void> {
     await db.people.bulkPut(people);
     await db.reviews.bulkPut(reviews);
     await db.actions.bulkPut(actions);
+    await db.coachReplies.bulkPut(replies);
     await db.kv.put({ key: SAMPLE_QUARTERS_KEY, value: createdQuarters, updatedAt: new Date().toISOString() });
   });
 }
@@ -419,7 +421,21 @@ function sampleRituals(from: LocalDate, today: LocalDate, crunch: CrunchPeriod[]
       });
     });
   }
-  return { reviews, actions };
+  // Coach replies for the three most recent reviewed weeks, in the tone the packets ask for.
+  const replies: CoachReply[] = reviews.slice(-3).map((r, i) => {
+    const t = at(addDays(r.weekStart, 6), 20, 10);
+    return {
+      id: `sample-reply-${r.weekStart}`,
+      kind: "weekly",
+      scope: r.weekStart,
+      text: SAMPLE_REPLIES[i % SAMPLE_REPLIES.length],
+      actions: [],
+      addedActions: [],
+      createdAt: t,
+      updatedAt: t,
+    };
+  });
+  return { reviews, actions, replies };
 }
 
 export async function wipeSampleData(): Promise<void> {
@@ -442,6 +458,7 @@ export async function wipeSampleData(): Promise<void> {
       db.crunch.filter(isSample).delete(),
       db.reviews.filter(isSample).delete(),
       db.actions.filter(isSample).delete(),
+      db.coachReplies.filter(isSample).delete(),
       db.quarters.bulkDelete(createdQuarters.filter((q) => !realGoalQuarters.has(q))),
       db.kv.delete(SAMPLE_QUARTERS_KEY),
     ]);
@@ -451,3 +468,33 @@ export async function wipeSampleData(): Promise<void> {
 export async function hasSampleData(): Promise<boolean> {
   return (await db.goals.filter((g) => g.id.startsWith('sample-')).count()) > 0;
 }
+
+const SAMPLE_REPLIES = [
+  `Family is carrying the week: bedtime three nights and a date night during a closing week is the real win, not luck. Work held too, four deep work blocks protected.
+
+The pattern that matters: strength training keeps sliding on travel days, and you told me why it exists, energy for the people who count on you. On the road it becomes the first thing cut, then sleep follows.
+
+Let the Friends dinner go until October. Friends is on Low, and a call a week is on track.
+
+Suggested actions:
+- Health: Lift at the hotel gym Tuesday at 6 AM, 20 minutes
+- Family: Book the sitter for Friday by Wednesday night
+- Work: Block 8 to 10 Monday before you open email`,
+  `Steady week, and your numbers say so: six check-in days, energy up from last week, and Health back on pace after the knee week. Work is the one burner under its intent. Deep work lost two mornings to early calls.
+
+Your why for deep work was that the best deals come from thinking, not reacting. Two reactive mornings is exactly that slipping.
+
+Dad is 23 days out on a two week cadence. One call closes that gap.
+
+Suggested actions:
+- Work: Decline anything before 10 on Tuesday and Thursday
+- Family: Call Dad on the Thursday drive home
+- Health: Phone on the kitchen charger at 10 every night`,
+  `Travel week, so the bar was lower on purpose, and you cleared it: runs on two days, a text to Jake, and you still rated your energy every night. Nothing here needs fixing.
+
+The one thing to watch: lights out slipped four nights, and sleep is what makes the rest easy for you. Protect it first next week.
+
+Suggested actions:
+- Health: Lights out by 10:30 Sunday through Wednesday
+- Friends: Text Priya about dinner dates this weekend`,
+];

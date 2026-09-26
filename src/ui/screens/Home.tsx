@@ -1,7 +1,7 @@
 import { motion } from "motion/react";
 import { useState } from "react";
 import { EnergyRow, ReachOut, ThemeSheet } from "../components/HomeExtras";
-import { ActionsList, CrunchBanner, CrunchChip, CrunchSheet, QuarterCloseCard, ReviewCard, SetupCard } from "../components/Rituals";
+import { ActionsList, CoachCard, CrunchBanner, CrunchChip, CrunchSheet, NextQuarterReadyCard, QuarterCloseCard, ReviewCard, SetupCard } from "../components/Rituals";
 import { BURNERS, BURNER_LABELS, INTENT_LABELS, daysLeftInQuarter, peopleByUrgency, quarterLabel } from "@/domain";
 import type { AppState } from '@/data/hooks';
 import { Flame } from '../components/Flame';
@@ -64,7 +64,7 @@ export function Home({ state }: { state: AppState }) {
         </button>
       </header>
 
-      {state.pendingClose ? <QuarterCloseCard quarter={state.pendingClose} /> : state.needsSetup ? <SetupCard quarter={quarter} /> : null}
+      {state.pendingClose ? <QuarterCloseCard quarter={state.pendingClose} /> : state.needsSetup ? <SetupCard quarter={quarter} /> : state.nextReady && !state.data.goals.length ? <NextQuarterReadyCard quarter={state.nextReady} /> : null}
 
       <motion.section
         initial={intro ? { opacity: 0, y: 20, scale: 0.96 } : false}
@@ -86,6 +86,7 @@ export function Home({ state }: { state: AppState }) {
       {state.crunchNow && <CrunchBanner crunch={state.crunchNow} onOpen={() => setCrunchOpen(true)} />}
 
       <ReviewCard today={today} reviewDay={state.settings.reviewDay} reviews={state.data.reviews} />
+      <CoachCard hasProfile={!!state.profile} />
 
       <section className="mt-6 grid grid-cols-2 gap-3.5">
         {BURNERS.map((b, i) => {

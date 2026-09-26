@@ -15,6 +15,7 @@ import {
   suggestWins,
   weekSummary,
   type BurnerId,
+  type DashboardInput,
   type WeekSummary,
   type WeeklyReview,
 } from '@/domain';
@@ -24,6 +25,9 @@ import { celebrate } from '../fx/Celebrations';
 import { sfx } from '../fx/audio';
 import { CountUp, MiniFlame, MoltenButton, StepEmbers } from '../components/sizzle';
 import { GhostButton, inputClass } from '../components/ui';
+import { CoachPanel } from '../components/CoachPanel';
+import { buildWeeklyPacket } from '@/domain/coach/packets';
+import { SensitiveWarning } from '../components/Sensitive';
 import { navigate } from '../router';
 import { PALETTES } from '../theme';
 import { STATUS_COLOR, STATUS_LABEL } from '../labels';
@@ -60,10 +64,11 @@ function ReviewFlow({ state, review }: { state: AppState; review: WeeklyReview }
   const weekEnd = addDays(review.weekStart, 6);
   const actionsWeek = actionsWeekFor(review.weekStart);
 
-  const summary = useMemo(() => {
-    const input = inputFor(state, quarterOf(weekEnd < state.today ? weekEnd : state.today).id) ?? inputFor(state, state.quarter.id)!;
-    return weekSummary(input, review.weekStart);
-  }, [state, review.weekStart, weekEnd]);
+  const input = useMemo(
+    () => inputFor(state, quarterOf(weekEnd < state.today ? weekEnd : state.today).id) ?? inputFor(state, state.quarter.id)!,
+    [state, weekEnd],
+  );
+  const summary = useMemo(() => weekSummary(input, review.weekStart), [input, review.weekStart]);
 
   const go = (to: number) => {
     sfx.tick();
@@ -135,7 +140,7 @@ function ReviewFlow({ state, review }: { state: AppState; review: WeeklyReview }
                   accent="#fda4af"
                 />
               )}
-              {s.key === 'coach' && <CoachStep review={review} onSkip={() => go(step + 1)} />}
+              {s.key === "coach" && <CoachStep state={state} review={review} input={input} />}
               {s.key === 'focus' && <FocusStep review={review} />}
               {s.key === 'actions' && (
                 <ActionsStep
@@ -384,6 +389,7 @@ function ListStep({
           Add
         </button>
       </form>
+      <SensitiveWarning text={text} />
       {open.length > 0 && (
         <div>
           <SectionLabel>From your week, tap to add</SectionLabel>
@@ -423,27 +429,28 @@ function useDraft(review: WeeklyReview, key: 'win' | 'miss' | 'action'): [string
   return [text, setText];
 }
 
-// ---------- Step 4: coach (arrives in Phase 4) ----------
+// ---------- Step 4: coach (optional) ----------
 
-function CoachStep({ review, onSkip }: { review: WeeklyReview; onSkip: () => void }) {
+function CoachStep({ state, review, input }: { state: AppState; review: WeeklyReview; input: DashboardInput }) {
+  const actionsWeek = actionsWeekFor(review.weekStart);
+  // Built before any tap, so Copy can hit the clipboard instantly inside the gesture.
+  const packet = useMemo(
+    () => buildWeeklyPacket({ input, reviews: state.data.reviews, review, weekStart: review.weekStart, profile: state.profile }),
+    [input, state.data.reviews, review, state.profile],
+  );
   return (
     <div className="space-y-4">
-      <div className="rounded-3xl border border-white/[0.08] bg-[#0b0b0d]/90 p-5">
-        <div className="text-[28px]">🧭</div>
-        <p className="mt-2 text-[17px] font-semibold">Coaching with your Claude app is coming next.</p>
-        <p className="mt-1.5 text-[15px] text-dim">
-          Soon this step will package your week into a coaching note to paste into Claude, then bring the reply back here. It is always optional.
-        </p>
-      </div>
-      <GhostButton
-        className="w-full"
-        onClick={() => {
-          void saveReview(review.id, { coachSkipped: true });
-          onSkip();
-        }}
-      >
-        Skip coaching this week
-      </GhostButton>
+      <p className="text-[16px] text-dim">
+        Optional. Your week, wins, and misses go to your own Claude app as a coaching note. Private notes and sensitive names never leave this phone.
+      </p>
+      <CoachPanel
+        kind="weekly"
+        scope={review.weekStart}
+        packet={packet}
+        replies={state.data.replies}
+        actionsWeek={actionsWeek}
+        existingActionTexts={state.data.actions.filter((a) => a.weekStart === actionsWeek).map((a) => a.text)}
+      />
     </div>
   );
 }
@@ -479,6 +486,7 @@ function FocusStep({ review }: { review: WeeklyReview }) {
         placeholder="Protect mornings"
         autoCapitalize="sentences"
       />
+      <SensitiveWarning text={text} />
       <div>
         <SectionLabel>Burners to lean into (up to 2)</SectionLabel>
         <div className="mt-2 grid grid-cols-2 gap-2">
@@ -571,6 +579,7 @@ function ActionsStep({
               Add
             </button>
           </div>
+          <SensitiveWarning text={text} />
           <div className="flex items-center gap-2" role="radiogroup" aria-label="Burner for this action">
             <span className="text-[13px] text-faint">Burner:</span>
             {BURNERS.map((b) => (

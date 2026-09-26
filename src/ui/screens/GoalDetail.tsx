@@ -4,6 +4,7 @@ import { quarterSpan, type Goal, type GoalProgress, type LogEntry, type Person }
 import { deleteLog, editLog, restoreLog } from '@/data/repo';
 import { LavaBar } from '../components/sizzle';
 import { PrivateToggle } from '../components/NotePrompt';
+import { SensitiveWarning } from '../components/Sensitive';
 import { GhostButton, PrimaryButton, Sheet, inputClass, useToast } from '../components/ui';
 import { PALETTES } from '../theme';
 import { STATUS_COLOR, STATUS_LABEL, goalTypeHint, progressText } from '../labels';
@@ -165,6 +166,7 @@ function LogEditor({ log, goal, onClose, onDelete }: { log: LogEntry | null; goa
           <label className="block">
             <span className="mb-1.5 block text-[13px] font-medium tracking-wide text-dim uppercase">Note</span>
             <textarea rows={3} className={`${inputClass} resize-none`} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional" />
+            <SensitiveWarning text={note} />
           </label>
           <PrivateToggle value={priv} onChange={setPriv} />
           {log.edits?.length ? (

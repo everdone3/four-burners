@@ -2,6 +2,7 @@
 // Private notes are never included in anything copied for Claude.
 import { createContext, useCallback, useContext, useState, type ReactNode } from 'react';
 import { GhostButton, PrimaryButton, Sheet, inputClass } from './ui';
+import { SensitiveWarning } from './Sensitive';
 
 export interface NoteRequest {
   title: string;
@@ -46,6 +47,7 @@ export function NotePromptProvider({ children }: { children: ReactNode }) {
             placeholder={req?.placeholder ?? 'A short note'}
             autoCapitalize="sentences"
           />
+          <SensitiveWarning text={text} />
           <PrivateToggle value={priv} onChange={setPriv} />
           <div className="flex gap-3">
             <GhostButton type="button" onClick={close}>

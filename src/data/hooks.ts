@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import {
   activeCrunch,
   computeDashboard,
+  nextQuarterId,
   quarterNeedingClose,
   quarterOf,
   today as todayFor,
@@ -16,9 +17,11 @@ import {
   type Quarter,
   type Settings,
   type Touchpoint,
+  type CoachReply,
+  type Profile,
   type WeeklyAction,
   type WeeklyReview,
-} from '@/domain';
+} from "@/domain";
 import { now as clockNow } from './clock';
 import { db } from './db';
 import { ensureCurrentQuarter, getSettings } from './repo';
@@ -53,6 +56,8 @@ export interface AppState {
   pendingClose?: Quarter;
   /** True when the current quarter has not been set up (no guided setup and no goals). */
   needsSetup: boolean;
+  /** Next quarter, when it has already been set up ahead of time. */
+  nextReady?: Quarter;
   crunchNow?: CrunchPeriod;
   quarters: Quarter[];
   data: {
@@ -65,7 +70,9 @@ export interface AppState {
     crunch: CrunchPeriod[];
     reviews: WeeklyReview[];
     actions: WeeklyAction[];
+    replies: CoachReply[];
   };
+  profile?: Profile;
 }
 
 export function useAppState(): AppState | undefined {
@@ -86,7 +93,7 @@ export function useAppState(): AppState | undefined {
       setTimeout(() => void ensureCurrentQuarter(), 0);
       return undefined;
     }
-    const [quarters, allGoals, logs, energy, people, touchpoints, crunch, reviews, actions] = await Promise.all([
+    const [quarters, allGoals, logs, energy, people, touchpoints, crunch, reviews, actions, replies, profile] = await Promise.all([
       db.quarters.toArray(),
       db.goals.toArray(),
       db.logs.toArray(),
@@ -96,6 +103,8 @@ export function useAppState(): AppState | undefined {
       db.crunch.toArray(),
       db.reviews.toArray(),
       db.actions.toArray(),
+      db.coachReplies.toArray(),
+      db.profiles.get("me"),
     ]);
     const goals = allGoals.filter((g) => g.quarterId === span.id);
     const dashboard = computeDashboard({
@@ -118,7 +127,8 @@ export function useAppState(): AppState | undefined {
       quarter,
       dashboard,
       pendingClose: quarterNeedingClose(quarters, liveGoals, span.id),
-      needsSetup: !quarter.setupAt && !goals.some((g) => !g.deleted),
+      needsSetup: !quarter.setupAt && !goals.some((g) => !g.deleted) && !quarters.some((q) => q.id === nextQuarterId(span.id) && q.setupAt),
+      nextReady: quarters.find((q) => q.id === nextQuarterId(span.id) && !!q.setupAt),
       crunchNow: activeCrunch(crunch, today),
       quarters,
       data: {
@@ -131,7 +141,9 @@ export function useAppState(): AppState | undefined {
         crunch: crunch.filter((c) => !c.deleted),
         reviews: reviews.filter((r) => !r.deleted),
         actions: actions.filter((a) => !a.deleted),
+        replies: replies.filter((r) => !r.deleted),
       },
+      profile: profile && !profile.deleted ? profile : undefined,
     };
   }, [settings, today, quarterReady]);
 }

@@ -285,3 +285,58 @@ export function CrunchBanner({ crunch, onOpen }: { crunch: CrunchPeriod; onOpen:
     </button>
   );
 }
+
+// ---------- Coach ----------
+
+export function CoachCard({ hasProfile }: { hasProfile: boolean }) {
+  if (!hasProfile) {
+    return (
+      <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
+        <GlowCard color="#c4a3ff" intensity={0.8} className="bg-black/65 backdrop-blur-xl">
+          <button onClick={() => navigate('onboarding')} className="flex w-full items-center gap-4 px-5 py-4 text-left">
+            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-[28px]" style={{ background: 'radial-gradient(circle at 50% 30%, rgba(196,163,255,0.35), rgba(100,33,214,0.12))' }}>
+              🧭
+            </span>
+            <span className="min-w-0 flex-1">
+              <span className="block text-[12px] font-bold tracking-[0.2em] text-[#c4a3ff] uppercase">Meet your coach</span>
+              <span className="block font-display text-[21px] font-bold">Tell it who you are</span>
+              <span className="block text-[13px] text-dim">A 4-minute interview. Talk or type.</span>
+            </span>
+            <span className="text-[26px] text-[#c4a3ff]">›</span>
+          </button>
+        </GlowCard>
+      </motion.section>
+    );
+  }
+  return (
+    <button
+      onClick={() => navigate('checkin')}
+      className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-black/55 text-[15px] font-semibold text-white/85 backdrop-blur"
+    >
+      <span aria-hidden>🧭</span> Coach check-in: where do I stand?
+    </button>
+  );
+}
+
+export function NextQuarterReadyCard({ quarter }: { quarter: Quarter }) {
+  const start = new Date(quarterSpanStart(quarter.id) + 'T12:00:00').toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+  return (
+    <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
+      <GlowCard color="#ffb454" intensity={0.7} className="bg-black/65 backdrop-blur-xl">
+        <button onClick={() => navigate(`setup/${quarter.id}`)} className="flex w-full items-center gap-4 px-5 py-4 text-left">
+          <span className="text-[30px]" aria-hidden>🔥</span>
+          <span className="min-w-0 flex-1">
+            <span className="block text-[12px] font-bold tracking-[0.2em] text-ember uppercase">Ready</span>
+            <span className="block font-display text-[21px] font-bold">{quarterLabel(quarter.id)} is set{quarter.theme ? `: ${quarter.theme}` : ''}</span>
+            <span className="block text-[13px] text-dim">Your burners light up {start}. Tap to adjust.</span>
+          </span>
+        </button>
+      </GlowCard>
+    </motion.section>
+  );
+}
+
+function quarterSpanStart(id: string): string {
+  const [y, q] = id.split('-Q').map(Number);
+  return `${y}-${String((q - 1) * 3 + 1).padStart(2, '0')}-01`;
+}

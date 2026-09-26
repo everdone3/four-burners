@@ -9,7 +9,11 @@ export type Route =
   | { name: 'reel'; quarterId: string; closing: boolean }
   | { name: 'close'; quarterId: string }
   | { name: 'setup'; quarterId: string }
-  | { name: 'archive'; quarterId?: string };
+  | { name: 'archive'; quarterId?: string }
+  | { name: 'checkin' }
+  | { name: 'onboarding' }
+  | { name: 'about' }
+  | { name: 'coach' };
 
 function parse(hash: string): Route {
   const [a, b, c] = hash.replace(/^#\/?/, '').split('/').filter(Boolean);
@@ -27,6 +31,11 @@ function parse(hash: string): Route {
       return b ? { name: a, quarterId: b } : { name: 'home' };
     case 'archive':
       return { name: 'archive', quarterId: b };
+    case 'checkin':
+    case 'onboarding':
+    case 'about':
+    case 'coach':
+      return { name: a };
     default:
       return { name: 'home' };
   }
@@ -35,7 +44,7 @@ function parse(hash: string): Route {
 // Guided flows survive the app being closed (e.g. switching to Claude to paste a packet):
 // on a cold start within an hour, reopen the flow you were in.
 const FLOW_KEY = 'fb-last-flow';
-const FLOWS = new Set(['review', 'close', 'setup']);
+const FLOWS = new Set(['review', 'close', 'setup', 'checkin', 'onboarding']);
 
 function rememberFlow(hash: string) {
   try {

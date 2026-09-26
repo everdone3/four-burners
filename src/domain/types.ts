@@ -177,6 +177,60 @@ export interface WeeklyAction extends BaseRecord {
   done?: Stamp;
 }
 
+export type TravelRhythm = 'rare' | 'monthly' | 'weekly' | 'mostly_away';
+
+export interface BurnerProfile {
+  /** Family/Friends: who matters and how often. Health: what it covers. Work: role at altitude, what it must never cost. */
+  matters: string;
+  /** What a winning quarter looks like for this burner, in the user's words. */
+  winning: string;
+}
+
+/** The fields of the About me profile (everything the coach may see, after redaction). */
+export interface ProfileFields {
+  lifeContext: string;
+  burners: Record<BurnerId, BurnerProfile>;
+  travel: TravelRhythm | null;
+  crunch: string;
+}
+
+/** The editable "About me" profile built by the onboarding interview. One record, id 'me'. */
+export interface Profile extends BaseRecord, ProfileFields {
+  id: 'me';
+  /** What last shaped the profile. */
+  source: 'interview' | 'edited' | 'coach';
+  /** One-level snapshot before a coach replace or interview re-run, for "Restore previous version". */
+  previous?: ProfileFields;
+  onboardedAt?: Instant;
+}
+
+export const EMPTY_PROFILE_FIELDS: ProfileFields = {
+  lifeContext: '',
+  burners: {
+    family: { matters: '', winning: '' },
+    friends: { matters: '', winning: '' },
+    health: { matters: '', winning: '' },
+    work: { matters: '', winning: '' },
+  },
+  travel: null,
+  crunch: '',
+};
+
+export type PacketKind = 'onboarding' | 'weekly' | 'quarter_setup' | 'checkin';
+
+/** A coach reply pasted back into the app, saved to the week or quarter it belongs to. */
+export interface CoachReply extends BaseRecord {
+  kind: PacketKind;
+  /** weekly: week Monday. quarter_setup: quarter id. checkin: local date. onboarding: 'profile'. */
+  scope: string;
+  text: string;
+  /** Suggested actions parsed from the reply. */
+  actions: string[];
+  /** Which of those were turned into weekly actions. */
+  addedActions?: string[];
+  packetChars?: number;
+}
+
 export interface Settings {
   dayBoundaryHour: number;
   graceDaysPerWeek: number;
@@ -184,6 +238,8 @@ export interface Settings {
   haptics: boolean;
   /** Weekly review day, 0 = Monday ... 6 = Sunday. */
   reviewDay: number;
+  /** Company or client names that are always redacted from coach packets. */
+  sensitiveTerms: string[];
 }
 
 export const DEFAULT_SETTINGS: Settings = {
@@ -192,4 +248,5 @@ export const DEFAULT_SETTINGS: Settings = {
   soundEffects: true,
   haptics: true,
   reviewDay: 6,
+  sensitiveTerms: [],
 };
