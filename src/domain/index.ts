@@ -7,3 +7,5 @@ export * from './goals';
 export * from './streaks';
 export * from './scoring';
 export * from './ids';
+export * from './people';
+export * from './logs';

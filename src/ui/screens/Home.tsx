@@ -1,5 +1,7 @@
-import { motion } from 'motion/react';
-import { BURNERS, BURNER_LABELS, INTENT_LABELS, daysLeftInQuarter, quarterLabel } from '@/domain';
+import { motion } from "motion/react";
+import { useState } from "react";
+import { EnergyRow, ReachOut, ThemeSheet } from "../components/HomeExtras";
+import { BURNERS, BURNER_LABELS, INTENT_LABELS, daysLeftInQuarter, peopleByUrgency, quarterLabel } from "@/domain";
 import type { AppState } from '@/data/hooks';
 import { Flame } from '../components/Flame';
 import { CountUp, GlowCard, IgniteText, ScoreRing, ShimmerText, StreakBadge, setIrisOrigin } from '../components/sizzle';
@@ -20,6 +22,7 @@ export function Home({ state }: { state: AppState }) {
   const intro = !introPlayed && !reduced;
   introPlayed = true;
   const d = (s: number) => (intro ? s : 0);
+  const [themeOpen, setThemeOpen] = useState(false);
 
   return (
     <div className="px-safe pt-safe relative pb-44">
@@ -37,9 +40,12 @@ export function Home({ state }: { state: AppState }) {
             </span>{' '}
             {daysLeft === 1 ? 'day' : 'days'} left
           </motion.div>
-          <h1 className="mt-1.5 font-display text-[44px] leading-[1.02] font-black tracking-tight">
-            <ShimmerText>{intro ? <IgniteText text={quarter.theme ?? 'Four Burners'} delay={0.15} /> : (quarter.theme ?? 'Four Burners')}</ShimmerText>
-          </h1>
+          <button onClick={() => { sfx.tick(); setThemeOpen(true); }} className="block text-left" aria-label={quarter.theme ? `Quarter theme: ${quarter.theme}. Tap to edit.` : "Set a quarter theme"}>
+            <h1 className="mt-1.5 font-display text-[44px] leading-[1.02] font-black tracking-tight">
+              <ShimmerText>{intro ? <IgniteText text={quarter.theme ?? 'Four Burners'} delay={0.15} /> : (quarter.theme ?? 'Four Burners')}</ShimmerText>
+            </h1>
+            {!quarter.theme && <span className="mt-1 block text-[13px] font-medium text-ember">+ Set a theme for the quarter</span>}
+          </button>
         </div>
         <button
           aria-label="Settings"
@@ -119,11 +125,15 @@ export function Home({ state }: { state: AppState }) {
         })}
       </section>
 
+      <EnergyRow entries={state.data.energy} today={today} />
+      <ReachOut statuses={peopleByUrgency(state.data.people, state.data.touchpoints, today)} />
+
       {dashboard.inCrunchToday && (
         <p className="mt-4 rounded-2xl border border-line bg-black/60 px-4 py-3 text-[14px] text-dim backdrop-blur">
           Travel/Crunch mode is on. Expectations are softened and streaks are paused.
         </p>
       )}
+      <ThemeSheet open={themeOpen} onClose={() => setThemeOpen(false)} quarterId={quarter.id} theme={quarter.theme} />
     </div>
   );
 }

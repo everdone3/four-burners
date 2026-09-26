@@ -2,20 +2,27 @@
 import {
   DEFAULT_INTENTS,
   DEFAULT_SETTINGS,
+  applyLogEdit,
   canSetIntent,
   changeIntent,
+  energyOn,
   newId,
   quarterOf,
   quarterSpan,
   stampNow,
   today as todayFor,
   type BurnerId,
+  type EnergyEntry,
   type Goal,
   type Intent,
   type LogEntry,
+  type LogPatch,
+  type Person,
   type Quarter,
   type QuarterId,
   type Settings,
+  type Touchpoint,
+  type TouchpointType,
 } from '@/domain';
 import { db, SETTINGS_KEY } from './db';
 
@@ -180,5 +187,108 @@ export async function deleteLog(id: string): Promise<void> {
 export async function wipeAll(): Promise<void> {
   await db.transaction('rw', db.tables, async () => {
     await Promise.all(db.tables.map((t) => t.clear()));
+  });
+}
+
+export async function editLog(id: string, patch: LogPatch): Promise<void> {
+  const log = await db.logs.get(id);
+  if (!log) return;
+  const next = applyLogEdit(log, patch, nowIso());
+  if (next !== log) await db.logs.put(next);
+}
+
+// ---------- People ----------
+
+export type NewPerson = Pick<Person, 'name' | 'burner' | 'cadenceDays'>;
+
+export async function addPerson(input: NewPerson, goalIds: string[] = []): Promise<Person> {
+  const t = nowIso();
+  const order = await db.people.filter((p) => !p.deleted && p.burner === input.burner).count();
+  const person: Person = { ...input, name: input.name.trim(), id: newId(), order, createdAt: t, updatedAt: t };
+  await db.people.put(person);
+  await linkPersonToGoals(person.id, goalIds);
+  return person;
+}
+
+export async function updatePerson(id: string, patch: Partial<Person>, goalIds?: string[]): Promise<void> {
+  await db.people.update(id, { ...patch, updatedAt: nowIso() });
+  if (goalIds) await linkPersonToGoals(id, goalIds);
+}
+
+export async function deletePerson(id: string): Promise<void> {
+  await db.people.update(id, { deleted: true, updatedAt: nowIso() });
+  await linkPersonToGoals(id, []);
+}
+
+/** Make the person linked to exactly these goals (links live on the goal). */
+async function linkPersonToGoals(personId: string, goalIds: string[]): Promise<void> {
+  const want = new Set(goalIds);
+  const t = nowIso();
+  await db.transaction('rw', db.goals, async () => {
+    const goals = await db.goals.filter((g) => !g.deleted && (want.has(g.id) || !!g.personIds?.includes(personId))).toArray();
+    for (const g of goals) {
+      const has = !!g.personIds?.includes(personId);
+      if (want.has(g.id) && !has) await db.goals.update(g.id, { personIds: [...(g.personIds ?? []), personId], updatedAt: t });
+      if (!want.has(g.id) && has) await db.goals.update(g.id, { personIds: g.personIds!.filter((x) => x !== personId), updatedAt: t });
+    }
+  });
+}
+
+export async function logTouchpoint(personId: string, type: TouchpointType, note?: string, notePrivate?: boolean): Promise<Touchpoint> {
+  const s = stampNow((await getSettings()).dayBoundaryHour);
+  const tp: Touchpoint = {
+    id: newId(),
+    personId,
+    type,
+    ...s,
+    createdAt: s.at,
+    updatedAt: s.at,
+    ...(note?.trim() ? { note: note.trim(), notePrivate: !!notePrivate } : {}),
+  };
+  await db.touchpoints.put(tp);
+  return tp;
+}
+
+export async function editTouchpoint(id: string, patch: { note?: string; notePrivate?: boolean; type?: TouchpointType }): Promise<void> {
+  const note = patch.note?.trim();
+  await db.touchpoints.update(id, {
+    ...(patch.type ? { type: patch.type } : {}),
+    ...(patch.note !== undefined ? { note: note || undefined, notePrivate: note ? !!patch.notePrivate : undefined } : {}),
+    updatedAt: nowIso(),
+  });
+}
+
+export async function deleteTouchpoint(id: string): Promise<void> {
+  await db.touchpoints.update(id, { deleted: true, updatedAt: nowIso() });
+}
+
+// ---------- Energy ----------
+
+/** One rating per lived day; tapping again changes it. Pass null to clear. */
+export async function setEnergy(rating: EnergyEntry['rating'] | null): Promise<void> {
+  const s = stampNow((await getSettings()).dayBoundaryHour);
+  const existing = energyOn(await db.energy.where('localDate').equals(s.localDate).toArray(), s.localDate);
+  if (rating === null) {
+    if (existing) await db.energy.update(existing.id, { deleted: true, updatedAt: s.at });
+    return;
+  }
+  if (existing) await db.energy.update(existing.id, { rating, updatedAt: s.at, at: s.at, offsetMin: s.offsetMin });
+  else await db.energy.put({ id: newId(), rating, ...s, createdAt: s.at, updatedAt: s.at });
+}
+
+/** Undo a log deletion, re-completing its milestone step if it had one. */
+export async function restoreLog(id: string): Promise<void> {
+  const t = nowIso();
+  await db.transaction('rw', db.logs, db.goals, async () => {
+    const log = await db.logs.get(id);
+    if (!log) return;
+    await db.logs.update(id, { deleted: false, updatedAt: t });
+    if (log.milestoneId) {
+      const goal = await db.goals.get(log.goalId);
+      if (goal?.milestones) {
+        const milestones = goal.milestones.map((m) => (m.id === log.milestoneId ? { ...m, doneAt: log.at } : m));
+        await db.goals.update(goal.id, { milestones, updatedAt: t });
+      }
+    }
   });
 }

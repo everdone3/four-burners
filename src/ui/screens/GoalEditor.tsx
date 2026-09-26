@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import {
   BURNER_LABELS,
+  checkGoal,
   goalSlot,
   newId,
   quarterSpan,
@@ -8,6 +9,7 @@ import {
   type Goal,
   type GoalType,
   type HabitPeriod,
+  type Intent,
   type Milestone,
   type QuarterId,
 } from '@/domain';
@@ -28,6 +30,8 @@ export function GoalEditor({
   quarterId,
   existingCount,
   goal,
+  intents,
+  goalCounts,
 }: {
   open: boolean;
   onClose: () => void;
@@ -35,6 +39,8 @@ export function GoalEditor({
   quarterId: QuarterId;
   existingCount: number;
   goal?: Goal;
+  intents: Record<BurnerId, Intent>;
+  goalCounts: Record<BurnerId, number>;
 }) {
   const span = quarterSpan(quarterId);
   const [title, setTitle] = useState('');
@@ -44,6 +50,8 @@ export function GoalEditor({
   const [period, setPeriod] = useState<HabitPeriod>('week');
   const [steps, setSteps] = useState<Milestone[]>([]);
   const [deadline, setDeadline] = useState(span.end);
+  const [why, setWhy] = useState("");
+  const [whenWhere, setWhenWhere] = useState("");
 
   useEffect(() => {
     if (!open) return;
@@ -54,11 +62,20 @@ export function GoalEditor({
     setPeriod(goal?.habitPeriod ?? 'week');
     setSteps(goal?.milestones ?? [{ id: newId(), title: '' }, { id: newId(), title: '' }]);
     setDeadline(goal?.deadline ?? span.end);
+    setWhy(goal?.why ?? "");
+    setWhenWhere(goal?.whenWhere ?? "");
   }, [open, goal, span.end]);
 
   const slot = goalSlot(existingCount);
   const blocked = !goal && !slot.allowed;
   const cleanSteps = steps.filter((s) => s.title.trim());
+  const warnings = title.trim()
+    ? checkGoal(
+        { burner, type, title, why, whenWhere, target: Number(target) || undefined },
+        intents,
+        { ...goalCounts, [burner]: (goalCounts[burner] ?? 0) + (goal ? 0 : 1) },
+      )
+    : [];
   const valid =
     title.trim().length > 0 && (type !== 'milestone' || cleanSteps.length > 0) && !blocked;
 
@@ -71,6 +88,8 @@ export function GoalEditor({
       habitPeriod: type === 'habit' ? period : undefined,
       milestones: type === 'milestone' ? cleanSteps.map((s) => ({ ...s, title: s.title.trim() })) : undefined,
       deadline: deadline > span.end ? span.end : deadline,
+      why: why.trim() || undefined,
+      whenWhere: whenWhere.trim() || undefined,
     };
     if (goal) await updateGoal(goal.id, fields);
     else await addGoal({ ...fields, burner, quarterId });
@@ -158,6 +177,14 @@ export function GoalEditor({
             </Field>
           )}
 
+          <Field label="Why it matters" hint="One line. Your coach uses this to remind you what it is for.">
+            <input className={inputClass} value={why} onChange={(e) => setWhy(e.target.value)} placeholder="We are a team first" autoCapitalize="sentences" />
+          </Field>
+
+          <Field label="When and where" hint="A specific plan: day, time, place.">
+            <input className={inputClass} value={whenWhere} onChange={(e) => setWhenWhere(e.target.value)} placeholder="Tuesday mornings before the office" autoCapitalize="sentences" />
+          </Field>
+
           <Field label="Deadline" hint="Defaults to the end of the quarter.">
             <input
               type="date"
@@ -168,6 +195,17 @@ export function GoalEditor({
               onChange={(e) => setDeadline(e.target.value || span.end)}
             />
           </Field>
+
+          {warnings.length > 0 && (
+            <ul className="space-y-2 rounded-2xl border border-amber-300/25 bg-amber-300/[0.06] p-3.5" aria-label="Goal checks">
+              {warnings.map((w) => (
+                <li key={w.code} className="flex gap-2.5 text-[14px] text-amber-100">
+                  <span aria-hidden className="text-amber-300">●</span>
+                  {w.message}
+                </li>
+              ))}
+            </ul>
+          )}
 
           <div className="flex gap-3 pt-2">
             {goal && (

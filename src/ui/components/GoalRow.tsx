@@ -4,7 +4,8 @@
 import { AnimatePresence, motion } from 'motion/react';
 import { useState } from 'react';
 import type { Goal, GoalProgress, LogEntry } from '@/domain';
-import { logProgress } from '@/data/repo';
+import { deleteLog, editLog, logProgress } from '@/data/repo';
+import { useNotePrompt } from './NotePrompt';
 import { celebrate } from '../fx/Celebrations';
 import { sfx } from '../fx/audio';
 import { inputClass, useToast } from './ui';
@@ -17,6 +18,7 @@ type Point = { x: number; y: number };
 
 export function useLogger() {
   const toast = useToast();
+  const promptNote = useNotePrompt();
   return async (goal: Goal, progress: GoalProgress, value: number, at: Point, milestoneId?: string) => {
     const willComplete = !progress.complete && progress.actual + value >= progress.required && progress.required > 0;
     const stepName = goal.milestones?.find((m) => m.id === milestoneId)?.title;
@@ -29,11 +31,23 @@ export function useLogger() {
       title: willComplete ? 'Goal complete' : undefined,
       subtitle: willComplete ? goal.title : undefined,
     });
-    await logProgress(goal, value, { milestoneId });
-    if (!willComplete) {
-      const what = goal.type === 'number' ? `+${value}${goal.unit ? ` ${goal.unit}` : ''}` : goal.type === 'milestone' ? stepName ?? 'Step' : goal.title;
-      toast({ message: `Logged ${what}` });
-    }
+    const entry = await logProgress(goal, value, { milestoneId });
+    const what = goal.type === 'number' ? `+${value}${goal.unit ? ` ${goal.unit}` : ''}` : goal.type === 'milestone' ? stepName ?? 'Step' : goal.title;
+    toast({
+      message: willComplete ? `${goal.title} complete` : `Logged ${what}`,
+      actions: [
+        {
+          label: 'Note',
+          run: () =>
+            promptNote({
+              title: `Note for ${goal.title}`,
+              placeholder: goal.burner === 'work' ? 'Habits and priorities, no client names' : 'How did it go?',
+              onSave: (note, isPrivate) => editLog(entry.id, { note, notePrivate: isPrivate }),
+            }),
+        },
+        { label: 'Undo', run: () => void deleteLog(entry.id) },
+      ],
+    });
   };
 }
 
@@ -51,11 +65,14 @@ export function GoalRow({
   progress,
   logs,
   showBurner,
+  onOpen,
 }: {
   goal: Goal;
   progress: GoalProgress;
   logs: readonly LogEntry[];
   showBurner?: boolean;
+  /** When set, tapping the goal opens its details and only the + button logs. */
+  onOpen?: () => void;
 }) {
   const [open, setOpen] = useState(false);
   const [custom, setCustom] = useState('');
@@ -101,8 +118,12 @@ export function GoalRow({
           />
         )}
       </AnimatePresence>
-      <button onClick={onTap} className="relative flex w-full items-center gap-3 px-4 py-4 text-left active:bg-white/[0.04]">
-        <div className="min-w-0 flex-1">
+      <div className="relative flex w-full items-center">
+        <button
+          onClick={onOpen ? () => { sfx.tick(); onOpen(); } : onTap}
+          className="min-w-0 flex-1 py-4 pr-2 pl-4 text-left active:bg-white/[0.04]"
+          aria-label={onOpen ? `${goal.title} details` : `Log ${goal.title}`}
+        >
           <div className="truncate text-[17px] font-semibold">{goal.title}</div>
           <div className="mt-0.5 flex gap-2 text-[13px]">
             <span className="text-dim tabular">{progressText(goal, progress)}</span>
@@ -112,20 +133,22 @@ export function GoalRow({
             <LavaBar fraction={progress.fraction} color={accent} hot={p.core} />
           </div>
           {showBurner && <div className="mt-1 text-[12px] text-faint">{goalTypeHint(goal)}</div>}
-        </div>
-        <motion.span
+        </button>
+        <motion.button
+          onClick={onTap}
+          disabled={finished}
+          aria-label={finished ? `${goal.title} done` : `Log ${goal.title}`}
           whileTap={{ scale: 0.85 }}
-          className="grid h-12 w-12 shrink-0 place-items-center rounded-full text-[22px] font-light"
+          className="mr-4 grid h-12 w-12 shrink-0 place-items-center rounded-full text-[22px] font-light"
           style={{
             color: finished ? '#000' : p.core,
             background: finished ? accent : `radial-gradient(circle at 50% 35%, ${p.mid}55, ${p.outer}22 70%)`,
             boxShadow: `inset 0 0 0 1px ${accent}77, 0 0 18px -4px ${p.mid}`,
           }}
-          aria-hidden
         >
-          {finished ? '✓' : '+'}
-        </motion.span>
-      </button>
+          {finished ? "✓" : "+"}
+        </motion.button>
+      </div>
 
       <AnimatePresence initial={false}>
         {open && (

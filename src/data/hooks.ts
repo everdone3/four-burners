@@ -1,7 +1,7 @@
 // Reactive reads for the UI. Recompute whenever IndexedDB changes.
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useState } from 'react';
-import { computeDashboard, quarterOf, today as todayFor, type Dashboard, type Goal, type LogEntry, type Person, type Quarter, type Settings, type Touchpoint } from '@/domain';
+import { computeDashboard, quarterOf, today as todayFor, type Dashboard, type EnergyEntry, type Goal, type LogEntry, type Person, type Quarter, type Settings, type Touchpoint } from '@/domain';
 import { db } from './db';
 import { ensureCurrentQuarter, getSettings } from './repo';
 
@@ -34,6 +34,7 @@ export interface AppState {
     logs: LogEntry[];
     people: Person[];
     touchpoints: Touchpoint[];
+    energy: EnergyEntry[];
   };
 }
 
@@ -80,7 +81,7 @@ export function useAppState(): AppState | undefined {
       today,
       quarter,
       dashboard,
-      data: { goals: goals.filter((g) => !g.deleted), logs: logs.filter((l) => !l.deleted), people: people.filter((p) => !p.deleted), touchpoints },
+      data: { goals: goals.filter((g) => !g.deleted), logs: logs.filter((l) => !l.deleted), people: people.filter((p) => !p.deleted), touchpoints, energy: energy.filter((e) => !e.deleted) },
     };
   }, [settings, today, quarterReady]);
 }

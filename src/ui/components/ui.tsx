@@ -68,7 +68,7 @@ export function Sheet({
 interface Toast {
   id: number;
   message: string;
-  action?: { label: string; run: () => void };
+  actions?: { label: string; run: () => void }[];
   duration: number;
 }
 
@@ -96,20 +96,31 @@ export function ToastProvider({ children }: { children: ReactNode }) {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 10, scale: 0.96 }}
               transition={spring}
-              className="pointer-events-auto flex min-h-12 w-full max-w-md items-center gap-3 rounded-2xl border border-line bg-raised/95 py-2 pr-2 pl-4 shadow-2xl backdrop-blur"
+              className="pointer-events-auto relative flex min-h-13 w-full max-w-md items-center gap-1 overflow-hidden rounded-2xl border border-white/10 bg-[#141416]/95 py-1.5 pr-1.5 pl-4 shadow-[0_10px_40px_-8px_rgba(0,0,0,0.9)] backdrop-blur-xl"
             >
               <span className="flex-1 text-[15px]">{t.message}</span>
-              {t.action && (
+              {t.actions?.map((a) => (
                 <button
-                  className="rounded-xl px-4 py-2 text-[15px] font-semibold text-ember active:bg-white/10"
+                  key={a.label}
+                  className="min-h-11 rounded-xl px-3.5 text-[15px] font-bold text-ember active:bg-white/10"
                   onClick={() => {
-                    t.action!.run();
+                    a.run();
                     setToasts((xs) => xs.filter((x) => x.id !== t.id));
                   }}
                 >
-                  {t.action.label}
+                  {a.label}
                 </button>
-              )}
+              ))}
+              {t.actions?.length ? (
+                <motion.span
+                  aria-hidden
+                  className="absolute bottom-0 left-0 h-[2px] w-full origin-left"
+                  style={{ background: "linear-gradient(90deg, #ff6a2b, #ffd27a)", boxShadow: "0 0 8px #ff8a3d" }}
+                  initial={{ scaleX: 1 }}
+                  animate={{ scaleX: 0 }}
+                  transition={{ duration: t.duration / 1000, ease: "linear" }}
+                />
+              ) : null}
             </motion.div>
           ))}
         </AnimatePresence>

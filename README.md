@@ -7,7 +7,7 @@ A private, offline-first goal tracker built on the Four Burners theory. Installa
 ## Status
 
 - [x] Phase 1: Foundation (domain logic + tests, local data, burners, intents, goals, logging, dashboard, flames, sample data)
-- [ ] Phase 2: Depth
+- [x] Phase 2: Depth (why, when/where, goal checks, people, energy, theme, undo, edit history)
 - [ ] Phase 3: Rhythm
 - [ ] Phase 4: Coach and onboarding
 - [ ] Phase 5: Sync

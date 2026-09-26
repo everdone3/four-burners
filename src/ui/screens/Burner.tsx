@@ -6,7 +6,9 @@ import {
   INTENT_LABELS,
   countHigh,
   MAX_HIGH_BURNERS,
+  peopleByUrgency,
   type BurnerId,
+  type Person,
   type Goal,
   type Intent,
 } from '@/domain';
@@ -19,6 +21,8 @@ import { goBack } from '../router';
 import { PALETTES } from '../theme';
 import { STATUS_COLOR, STATUS_LABEL } from '../labels';
 import { GoalEditor } from './GoalEditor';
+import { GoalDetail } from "./GoalDetail";
+import { PersonCard, PersonEditor } from "../components/People";
 import { MoltenButton, getIrisOrigin } from '../components/sizzle';
 import { useReducedMotion } from '../motion';
 import { sfx } from '../fx/audio';
@@ -26,7 +30,12 @@ import { sfx } from '../fx/audio';
 export function BurnerScreen({ state, burner }: { state: AppState; burner: BurnerId }) {
   const { quarter, dashboard, data } = state;
   const s = dashboard.burners[burner];
-  const [editing, setEditing] = useState(false);
+  const [detailId, setDetailId] = useState<string | null>(null);
+  const [personEditor, setPersonEditor] = useState<{ open: boolean; person?: Person }>({ open: false });
+  const isPeopleBurner = burner === "family" || burner === "friends";
+  const people = isPeopleBurner ? peopleByUrgency(data.people.filter((p) => p.burner === burner), data.touchpoints, state.today) : [];
+  const detail = s.goals.find((g) => g.goal.id === detailId);
+  const goalCounts = Object.fromEntries(BURNERS.map((b) => [b, dashboard.burners[b].goals.length])) as Record<BurnerId, number>;
   const [editor, setEditor] = useState<{ open: boolean; goal?: Goal }>({ open: false });
   const [pendingIntent, setPendingIntent] = useState<Intent | null>(null);
   const [reason, setReason] = useState('');
@@ -105,34 +114,40 @@ export function BurnerScreen({ state, burner }: { state: AppState; burner: Burne
         </div>
 
         <div className="mt-8 mb-3 flex items-baseline justify-between">
-          <h2 className="font-display text-[22px] font-semibold">Goals</h2>
-          {s.goals.length > 0 && (
-            <button onClick={() => setEditing((e) => !e)} className="min-h-11 px-2 text-[16px] font-medium text-ember">
-              {editing ? 'Done' : 'Edit'}
-            </button>
-          )}
+          <h2 className="font-display text-[24px] font-bold">Goals</h2>
+          <span className="text-[13px] text-faint">Tap a goal for details</span>
         </div>
         <div className="space-y-2.5">
-          {s.goals.map(({ goal, progress }) =>
-            editing ? (
-              <button
-                key={goal.id}
-                onClick={() => setEditor({ open: true, goal })}
-                className="flex min-h-14 w-full items-center justify-between rounded-2xl border border-line bg-surface px-4 text-left text-[17px] active:bg-white/5"
-              >
-                {goal.title}
-                <span className="text-[15px] text-ember">Edit</span>
-              </button>
-            ) : (
-              <GoalRow key={goal.id} goal={goal} progress={progress} logs={data.logs} />
-            ),
-          )}
+          {s.goals.map(({ goal, progress }) => (
+            <GoalRow key={goal.id} goal={goal} progress={progress} logs={data.logs} onOpen={() => setDetailId(goal.id)} />
+          ))}
           {s.goals.length === 0 && (
             <p className="rounded-2xl border border-dashed border-line px-4 py-6 text-center text-[15px] text-dim">
               No goals yet. Three is the sweet spot.
             </p>
           )}
         </div>
+
+        {isPeopleBurner && (
+          <div className="mt-9">
+            <div className="mb-3 flex items-baseline justify-between">
+              <h2 className="font-display text-[24px] font-bold">People</h2>
+              <button onClick={() => setPersonEditor({ open: true })} className="min-h-11 px-2 text-[16px] font-semibold" style={{ color: palette.accent }}>
+                + Add
+              </button>
+            </div>
+            <div className="space-y-2.5">
+              {people.map((ps) => (
+                <PersonCard key={ps.person.id} s={ps} onEdit={() => setPersonEditor({ open: true, person: ps.person })} />
+              ))}
+              {people.length === 0 && (
+                <p className="rounded-2xl border border-dashed border-line px-4 py-6 text-center text-[15px] text-dim">
+                  Who matters most here? Add them and set how often you want to connect.
+                </p>
+              )}
+            </div>
+          </div>
+        )}
 
         {history.length > 0 && (
           <div className="mt-8">
@@ -164,7 +179,31 @@ export function BurnerScreen({ state, burner }: { state: AppState; burner: Burne
         burner={burner}
         quarterId={quarter.id}
         existingCount={s.goals.length}
+        intents={quarter.intents}
+        goalCounts={goalCounts}
       />
+
+      <GoalDetail
+        goal={detail?.goal ?? null}
+        progress={detail?.progress}
+        logs={data.logs}
+        people={data.people}
+        onClose={() => setDetailId(null)}
+        onEdit={(g) => {
+          setDetailId(null);
+          setEditor({ open: true, goal: g });
+        }}
+      />
+
+      {isPeopleBurner && (
+        <PersonEditor
+          open={personEditor.open}
+          person={personEditor.person}
+          burner={burner as "family" | "friends"}
+          goals={data.goals}
+          onClose={() => setPersonEditor({ open: false })}
+        />
+      )}
 
       <Sheet open={pendingIntent !== null} onClose={() => setPendingIntent(null)} title="Why the change?">
         <p className="mb-4 text-[15px] text-dim">

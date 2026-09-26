@@ -4,6 +4,7 @@ import { BURNERS, type BurnerId } from '@/domain';
 import { useAppState } from '@/data/hooks';
 import { ToastProvider } from './components/ui';
 import { MoltenButton } from './components/sizzle';
+import { NotePromptProvider } from "./components/NotePrompt";
 import { Atmosphere } from './fx/Atmosphere';
 import { Celebrations } from './fx/Celebrations';
 import { setSoundEnabled, sfx } from './fx/audio';
@@ -21,7 +22,9 @@ let logIntro = true;
 export function App() {
   return (
     <ToastProvider>
-      <Shell />
+      <NotePromptProvider>
+        <Shell />
+      </NotePromptProvider>
     </ToastProvider>
   );
 }
