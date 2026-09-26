@@ -1,3 +1,4 @@
+import { motion } from 'motion/react';
 import { useState } from 'react';
 import {
   BURNERS,
@@ -18,6 +19,9 @@ import { goBack } from '../router';
 import { PALETTES } from '../theme';
 import { STATUS_COLOR, STATUS_LABEL } from '../labels';
 import { GoalEditor } from './GoalEditor';
+import { MoltenButton, getIrisOrigin } from '../components/sizzle';
+import { useReducedMotion } from '../motion';
+import { sfx } from '../fx/audio';
 
 export function BurnerScreen({ state, burner }: { state: AppState; burner: BurnerId }) {
   const { quarter, dashboard, data } = state;
@@ -30,6 +34,8 @@ export function BurnerScreen({ state, burner }: { state: AppState; burner: Burne
   const palette = PALETTES[burner];
   const highs = countHigh(quarter.intents);
   const history = quarter.intentHistory.filter((h) => h.burner === burner);
+  const reduced = useReducedMotion();
+  const [iris] = useState(getIrisOrigin);
 
   const requestIntent = async (to: Intent) => {
     setError('');
@@ -48,13 +54,21 @@ export function BurnerScreen({ state, burner }: { state: AppState; burner: Burne
     else setError(r.error);
   };
 
+  // Fixed-position pieces (Add goal bar, sheets) stay outside the iris clip so it never cuts them off.
   return (
-    <div className="pb-40">
-      <div className="relative h-[300px] overflow-hidden">
-        <div className="absolute inset-x-0 top-10 bottom-0">
-          <Flame burner={burner} intent={s.intent} heat={s.heat} brightness={s.brightness} />
+    <>
+    <motion.div
+      className="pb-40"
+      initial={reduced ? { opacity: 0 } : { clipPath: `circle(0px at ${iris.x}px ${iris.y}px)` }}
+      animate={reduced ? { opacity: 1 } : { clipPath: `circle(300vmax at ${iris.x}px ${iris.y}px)` }}
+      transition={{ duration: 0.75, ease: [0.65, 0, 0.35, 1] }}
+    >
+      <div className="relative h-[380px] overflow-hidden">
+        <div className="absolute inset-0" style={{ background: `radial-gradient(ellipse at 50% 90%, ${palette.outer}55, transparent 60%)` }} />
+        <div className="absolute inset-x-0 top-6 bottom-0">
+          <Flame burner={burner} intent={s.intent} heat={s.heat} brightness={s.brightness} ignite={reduced ? undefined : 0.35} />
         </div>
-        <div className="absolute inset-x-0 bottom-0 h-24 bg-gradient-to-t from-black to-transparent" />
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent" />
         <div className="px-safe pt-safe relative flex items-center justify-between">
           <button onClick={goBack} className="-ml-2 flex h-11 items-center gap-1 rounded-full pr-3 pl-2 text-[17px] text-dim active:bg-white/10">
             <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M15 18l-6-6 6-6" /></svg>
@@ -65,7 +79,7 @@ export function BurnerScreen({ state, burner }: { state: AppState; burner: Burne
       </div>
 
       <div className="px-safe -mt-8 relative">
-        <h1 className="font-display text-[34px] font-bold" style={{ color: palette.accent }}>
+        <h1 className="font-display text-[48px] leading-none font-black tracking-tight" style={{ color: palette.accent, textShadow: `0 0 24px ${palette.mid}aa, 0 0 60px ${palette.outer}88` }}>
           {BURNER_LABELS[burner]}
         </h1>
         <p className={`text-[15px] ${STATUS_COLOR[s.status]}`}>{STATUS_LABEL[s.status]}</p>
@@ -135,11 +149,12 @@ export function BurnerScreen({ state, burner }: { state: AppState; burner: Burne
           </div>
         )}
       </div>
+    </motion.div>
 
       <div className="pb-safe fixed inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black via-black/90 to-transparent px-5 pt-8">
-        <PrimaryButton className="w-full" onClick={() => setEditor({ open: true })}>
+        <MoltenButton className="h-15 w-full text-[18px]" onClick={() => { sfx.tick(); setEditor({ open: true }); }}>
           Add goal
-        </PrimaryButton>
+        </MoltenButton>
       </div>
 
       <GoalEditor
@@ -177,7 +192,7 @@ export function BurnerScreen({ state, burner }: { state: AppState; burner: Burne
           </div>
         </form>
       </Sheet>
-    </div>
+    </>
   );
 }
 

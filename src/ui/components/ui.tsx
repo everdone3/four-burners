@@ -3,39 +3,6 @@ import { AnimatePresence, motion } from 'motion/react';
 import { createContext, useCallback, useContext, useEffect, useRef, useState, type ReactNode } from 'react';
 import { useReducedMotion, spring } from '../motion';
 
-// ---------- Score ring ----------
-
-export function ScoreRing({ value, label, color }: { value: number; label: string; color: string }) {
-  const r = 30;
-  const c = 2 * Math.PI * r;
-  const reduced = useReducedMotion();
-  return (
-    <div className="flex items-center gap-3">
-      <svg width="72" height="72" viewBox="0 0 72 72" className="-rotate-90" aria-hidden>
-        <circle cx="36" cy="36" r={r} fill="none" stroke="rgb(255 255 255 / 0.1)" strokeWidth="6" />
-        <motion.circle
-          cx="36"
-          cy="36"
-          r={r}
-          fill="none"
-          stroke={color}
-          strokeWidth="6"
-          strokeLinecap="round"
-          strokeDasharray={c}
-          initial={{ strokeDashoffset: c }}
-          animate={{ strokeDashoffset: c * (1 - Math.max(0, Math.min(100, value)) / 100) }}
-          transition={reduced ? { duration: 0 } : { duration: 1.1, ease: [0.2, 0.8, 0.2, 1] }}
-          style={{ filter: `drop-shadow(0 0 6px ${color}88)` }}
-        />
-      </svg>
-      <div>
-        <div className="font-display text-3xl font-semibold tabular leading-none">{value}</div>
-        <div className="mt-1 text-[13px] text-dim">{label}</div>
-      </div>
-    </div>
-  );
-}
-
 // ---------- Bottom sheet ----------
 
 export function Sheet({

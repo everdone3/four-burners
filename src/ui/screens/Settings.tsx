@@ -55,6 +55,16 @@ export function SettingsScreen({ state }: { state: AppState }) {
         </Row>
       </Section>
 
+      <Section title="Effects">
+        <Row label="Sound effects" hint="Crackles, whooshes, and celebration sounds.">
+          <Toggle checked={state.settings.soundEffects} onChange={(v) => saveSettings({ soundEffects: v })} label="Sound effects" />
+        </Row>
+        <Row label="Haptics" hint="A tap you can feel when you log.">
+          <Toggle checked={state.settings.haptics} onChange={(v) => saveSettings({ haptics: v })} label="Haptics" />
+        </Row>
+        <p className="pt-2 text-[13px] text-faint">Turn on Reduce Motion in iOS Settings for a calmer, still version of the app.</p>
+      </Section>
+
       <Section title="Developer">
         <p className="mb-3 text-[14px] text-dim">
           Sample data fills in last quarter and this quarter so far: goals, logs, people, energy, and a travel week.
@@ -102,5 +112,20 @@ function Row({ label, hint, children }: { label: string; hint?: string; children
       </div>
       {children}
     </div>
+  );
+}
+
+function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
+  return (
+    <button
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      onClick={() => onChange(!checked)}
+      className="relative h-8 w-13 shrink-0 rounded-full transition"
+      style={{ background: checked ? 'linear-gradient(90deg, #ffb454, #ff6a2b)' : 'rgba(255,255,255,0.15)', boxShadow: checked ? '0 0 16px -2px #ff8a3d' : undefined }}
+    >
+      <span className="absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all" style={{ left: checked ? 24 : 4 }} />
+    </button>
   );
 }

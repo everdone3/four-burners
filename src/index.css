@@ -62,3 +62,31 @@
   50% { transform: scale(1.02, 0.97); opacity: 0.9; }
   75% { transform: scale(0.98, 1.02); opacity: 1; }
 }
+
+@property --angle {
+  syntax: '<angle>';
+  initial-value: 0deg;
+  inherits: false;
+}
+@keyframes spin-angle {
+  to { --angle: 360deg; }
+}
+@keyframes shimmer {
+  0% { background-position: 100% 0; }
+  60%, 100% { background-position: -50% 0; }
+}
+@keyframes lava {
+  to { background-position: -200% 0; }
+}
+@keyframes pulse-dot {
+  0%, 100% { transform: translate(50%, -50%) scale(1); opacity: 1; }
+  50% { transform: translate(50%, -50%) scale(1.5); opacity: 0.7; }
+}
+@keyframes breathe {
+  0%, 100% { transform: translate(-50%, -50%) scale(1); }
+  50% { transform: translate(-50%, -50%) scale(1.12); }
+}
+@keyframes glow-pulse {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.12); }
+}

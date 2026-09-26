@@ -133,9 +133,13 @@ export interface CrunchPeriod extends BaseRecord {
 export interface Settings {
   dayBoundaryHour: number;
   graceDaysPerWeek: number;
+  soundEffects: boolean;
+  haptics: boolean;
 }
 
 export const DEFAULT_SETTINGS: Settings = {
   dayBoundaryHour: 3,
   graceDaysPerWeek: 1,
+  soundEffects: true,
+  haptics: true,
 };
