@@ -498,8 +498,13 @@ export function packetGate(
     if (!note) continue;
     for (const needle of privateNeedles(note, terms)) {
       if (!hay.includes(needle)) continue;
-      allowed ??= [STATIC_ALNUM, ...publicTexts.map(alnum)];
-      if (allowed.some((a) => a.includes(needle))) continue;
+      // Compare against public texts both as written and as redacted (a note naming a sensitive term
+      // appears only redacted). A note is excused only when its WHOLE text (raw or redacted) is written
+      // somewhere public or is fixed packet wording; a public text that merely shares its opening words
+      // does not excuse a cut-off leak of the rest.
+      allowed ??= [STATIC_ALNUM, ...publicTexts.flatMap((t) => [alnum(t), alnum(prepText(t, terms))])];
+      const whole = [alnum(note), alnum(prepText(note, terms))].filter((f) => f.length >= MIN_PRIVATE_CHARS);
+      if (whole.some((w) => allowed!.some((a) => a.includes(w)))) continue;
       problems.push('A private note appears in the packet.');
       break outer;
     }
@@ -543,7 +548,12 @@ function privateNotesOf(logs: readonly LogEntry[] | undefined, touchpoints: read
   const out: string[] = [];
   for (const l of logs ?? []) {
     if (l.notePrivate && l.note?.trim()) out.push(l.note);
-    for (const e of l.edits ?? []) if (e.prevNote?.trim()) out.push(e.prevNote);
+    for (const e of l.edits ?? []) {
+      if (!e.prevNote?.trim()) continue;
+      // A value-only correction records the unchanged public note as prevNote; that is not a hidden version.
+      if (!l.notePrivate && l.note && alnum(e.prevNote) === alnum(l.note)) continue;
+      out.push(e.prevNote);
+    }
   }
   for (const t of touchpoints ?? []) if (t.notePrivate && t.note?.trim()) out.push(t.note);
   return out;

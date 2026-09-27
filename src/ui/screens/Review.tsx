@@ -69,6 +69,7 @@ function ReviewFlow({ state, review }: { state: AppState; review: WeeklyReview }
     [state, weekEnd],
   );
   const summary = useMemo(() => weekSummary(input, review.weekStart), [input, review.weekStart]);
+  const coached = state.data.replies.some((r) => r.kind === "weekly" && r.scope === review.weekStart);
 
   const go = (to: number) => {
     sfx.tick();
@@ -165,11 +166,12 @@ function ReviewFlow({ state, review }: { state: AppState; review: WeeklyReview }
             <MoltenButton
               className="h-15 flex-1 text-[18px]"
               onClick={() => {
-                if (s.key === 'coach') void saveReview(review.id, { coachSkipped: true });
+                // Skipping is only recorded when no coach reply was saved for this week.
+                if (s.key === 'coach' && !coached) void saveReview(review.id, { coachSkipped: true });
                 go(step + 1);
               }}
             >
-              {s.key === 'coach' ? 'Skip for now' : 'Next'}
+              {s.key === 'coach' && !coached ? 'Skip for now' : 'Next'}
             </MoltenButton>
           ) : (
             <MoltenButton className="h-15 flex-1 text-[18px]" onClick={finish}>

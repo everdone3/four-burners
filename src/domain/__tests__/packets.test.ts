@@ -1556,3 +1556,20 @@ describe('finalize and the Copy gate', () => {
     expect(p.safe).toBe(true);
   });
 });
+
+describe('review fix: value correction on a note that names a sensitive term', () => {
+  it('keeps Copy enabled after a value-only correction (applyLogEdit records the public note as prevNote)', async () => {
+    const { applyLogEdit } = await import('../logs');
+    const m = mini();
+    const before = buildWeeklyPacket(miniWeekly(m));
+    expect(before.safe).toBe(true);
+    const logs = m.logs.map((l) =>
+      l.note === 'Wrote the Summit Wealth memo in one pass' ? applyLogEdit(l, { value: l.value + 1, note: l.note }, '2026-09-19T12:00:00.000Z') : l,
+    );
+    expect(logs.some((l) => l.edits?.length)).toBe(true);
+    const after = buildWeeklyPacket(miniWeekly({ ...m, logs }));
+    expect(after.problems).toEqual([]);
+    expect(after.safe).toBe(true);
+    expect(after.text).not.toContain('Summit Wealth');
+  });
+});

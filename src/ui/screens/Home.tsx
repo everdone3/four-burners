@@ -86,7 +86,7 @@ export function Home({ state }: { state: AppState }) {
       {state.crunchNow && <CrunchBanner crunch={state.crunchNow} onOpen={() => setCrunchOpen(true)} />}
 
       <ReviewCard today={today} reviewDay={state.settings.reviewDay} reviews={state.data.reviews} />
-      <CoachCard hasProfile={!!state.profile} />
+      <CoachCard hasProfile={!!state.profile} resumable={!!state.onboarding && !state.onboarding.completedAt && state.onboarding.step > 0 && !state.onboarding.resumeHidden} />
 
       <section className="mt-6 grid grid-cols-2 gap-3.5">
         {BURNERS.map((b, i) => {

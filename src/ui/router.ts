@@ -1,5 +1,6 @@
 // Tiny hash router. Hash routes keep iOS back-swipe and the installed PWA happy without server config.
 import { useEffect, useState } from 'react';
+import { readPending } from '@/coach/session';
 
 export type Route =
   | { name: 'home' }
@@ -44,7 +45,9 @@ function parse(hash: string): Route {
 // Guided flows survive the app being closed (e.g. switching to Claude to paste a packet):
 // on a cold start within an hour, reopen the flow you were in.
 const FLOW_KEY = 'fb-last-flow';
-const FLOWS = new Set(['review', 'close', 'setup', 'checkin', 'onboarding']);
+const FLOWS = new Set(['review', 'close', 'setup', 'checkin', 'onboarding', 'about']);
+// Screens that only matter on relaunch while a copied coach packet is waiting for its reply.
+const COACH_ONLY = new Set(['checkin', 'about']);
 
 function rememberFlow(hash: string) {
   try {
@@ -60,7 +63,12 @@ export function restoreFlowOnLaunch() {
   try {
     if (location.hash && location.hash !== '#/') return;
     const saved = JSON.parse(localStorage.getItem(FLOW_KEY) ?? 'null') as { hash: string; at: number } | null;
-    if (saved && Date.now() - saved.at < 60 * 60_000) location.replace(saved.hash);
+    if (!saved) return;
+    const age = Date.now() - saved.at;
+    const name = saved.hash.replace(/^#\/?/, '').split('/')[0];
+    // A packet copied for Claude keeps its screen restorable as long as the paste box waits (2 hours).
+    const waiting = readPending() !== null;
+    if (COACH_ONLY.has(name) ? waiting : age < 60 * 60_000 || waiting) location.replace(saved.hash);
   } catch {
     // ignore
   }

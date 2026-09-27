@@ -5,7 +5,7 @@ import type { PacketKind } from '@/domain';
 
 const KEY = 'fb-coach-pending';
 /** Coming back later than this no longer auto-opens the paste field. */
-const MAX_AGE_MS = 2 * 60 * 60_000;
+export const MAX_AGE_MS = 2 * 60 * 60_000;
 
 export interface PendingCoach {
   kind: PacketKind;
@@ -20,6 +20,7 @@ export function markCopied(p: Omit<PendingCoach, 'copiedAt'>) {
   } catch {
     // storage unavailable; the paste field is still one tap away
   }
+  notify();
 }
 
 export function readPending(): PendingCoach | null {
@@ -44,4 +45,11 @@ export function clearPending() {
   } catch {
     // ignore
   }
+  notify();
+}
+
+/** Same-tab listeners (the "storage" event only fires in other tabs). */
+export const PENDING_EVENT = "fb-coach-pending";
+function notify() {
+  globalThis.dispatchEvent?.(new Event(PENDING_EVENT));
 }

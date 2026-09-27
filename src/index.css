@@ -90,3 +90,8 @@
   0%, 100% { filter: brightness(1); }
   50% { filter: brightness(1.12); }
 }
+
+/* When the coach reminder banner is showing at the top, it carries the safe-area inset itself. */
+.has-banner .pt-safe {
+  padding-top: 8px;
+}

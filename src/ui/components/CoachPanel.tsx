@@ -10,7 +10,7 @@ import { findSensitive } from '@/domain/coach/redact';
 import { addActionFromReply, deleteCoachReply, saveCoachReply } from '@/data/repo';
 import { useSettings } from '@/data/hooks';
 import { CLAUDE_SCHEME_LINK, CLAUDE_UNIVERSAL_LINK, coach, copyText } from '@/coach/channel';
-import { clearPending, isPending, markCopied, readPending } from '@/coach/session';
+import { PENDING_EVENT, clearPending, isPending, markCopied, readPending } from '@/coach/session';
 import { celebrate } from '../fx/Celebrations';
 import { sfx } from '../fx/audio';
 import { haptic } from '../fx/haptics';
@@ -65,8 +65,11 @@ export function CoachPanel({
   // Coming back from Claude: open the paste box. Three signals, since iOS standalone apps are inconsistent.
   useEffect(() => {
     const check = () => {
-      if (document.visibilityState === 'visible' && isPending(kind, scope)) {
+      if (document.visibilityState === "visible" && isPending(kind, scope)) {
+        // Bring the paste box to the front: close any copy sheet still open from before.
         setHandoff(false);
+        setManual(false);
+        setPreview(false);
         setPasteOpen(true);
       }
     };
@@ -163,7 +166,14 @@ export function CoachPanel({
 
       <Sheet open={manual} onClose={() => setManual(false)} title="Copy it by hand">
         <p className="mb-3 text-[15px] text-dim">The automatic copy was blocked. Press and hold the text, tap Select All, then Copy.</p>
-        <textarea readOnly className={`${inputClass} h-64 text-[13px]`} value={packet.text} onFocus={(e) => e.currentTarget.select()} />
+        <textarea
+          readOnly
+          className={`${inputClass} h-64 text-[13px]`}
+          value={packet.text}
+          onFocus={(e) => e.currentTarget.select()}
+          // Copying by hand (long-press, Copy) counts: coming back should open the paste box.
+          onCopy={() => markCopied({ kind, scope, chars: packet.chars })}
+        />
         <PrimaryButton
           className="mt-3 w-full"
           onClick={() => {
@@ -444,8 +454,8 @@ function ReplyCard({
             <button
               className="text-[13px] text-faint"
               onClick={async () => {
-                await copyText(actions.map((a) => `- ${a.burner ? `${BURNER_LABELS[a.burner]}: ` : ''}${a.text}`).join('\n'));
-                toast({ message: 'Actions copied' });
+                const ok = await copyText(actions.map((a) => `- ${a.burner ? `${BURNER_LABELS[a.burner]}: ` : ''}${a.text}`).join('\n'));
+                toast({ message: ok ? 'Actions copied' : 'Copy was blocked. Press and hold the reply text to copy it.' });
               }}
             >
               Copy actions
@@ -459,36 +469,50 @@ function ReplyCard({
 
 /**
  * If the app relaunched onto some other screen after you copied a packet, offer a way back to the
- * screen whose paste box is waiting.
+ * screen whose paste box is waiting. Rendered in the page flow (not floating), so it never covers a
+ * screen's back button or the Settings gear. Dismissing hides it without cancelling the auto-open.
  */
 export function PendingCoachBanner({ routeName }: { routeName: string }) {
   const [pending, setPending] = useState(() => readPending());
+  const [hiddenFor, setHiddenFor] = useState<number | null>(null);
   useEffect(() => {
     const check = () => setPending(readPending());
     document.addEventListener('visibilitychange', check);
     window.addEventListener('pageshow', check);
-    const id = setInterval(check, 15_000);
+    window.addEventListener(PENDING_EVENT, check);
+    const id = setInterval(check, 30_000);
     return () => {
       document.removeEventListener('visibilitychange', check);
       window.removeEventListener('pageshow', check);
+      window.removeEventListener(PENDING_EVENT, check);
       clearInterval(id);
     };
   }, []);
-  if (!pending) return null;
-  const target =
+  // Re-read on every navigation so a reply saved on another screen hides it at once.
+  useEffect(() => setPending(readPending()), [routeName]);
+  const target = !pending
+    ? null
+    :
     pending.kind === 'weekly' ? { route: 'review', path: 'review' } :
     pending.kind === 'checkin' ? { route: 'checkin', path: 'checkin' } :
     pending.kind === 'quarter_setup' ? { route: 'setup', path: `setup/${pending.scope}` } :
-    { route: 'about', path: 'about' };
-  if (routeName === target.route || routeName === 'onboarding') return null;
+    { route: "about", path: "about" };
+  const visible = !!pending && !!target && hiddenFor !== pending.copiedAt && routeName !== target.route && routeName !== "onboarding" && routeName !== "reel";
+  // While the banner shows it owns the top safe-area inset; screens below switch to a slim top padding
+  // (see .has-banner in index.css) so the gap is not doubled.
+  useEffect(() => {
+    document.documentElement.classList.toggle("has-banner", visible);
+    return () => document.documentElement.classList.remove("has-banner");
+  }, [visible]);
+  if (!visible || !target || !pending) return null;
   return (
-    <div className="pt-safe pointer-events-none fixed inset-x-0 top-0 z-[45] flex justify-center px-4">
-      <div className="pointer-events-auto mt-2 flex w-full max-w-md items-center gap-2 rounded-2xl border border-ember/40 bg-[#141416]/95 py-1.5 pr-1.5 pl-4 shadow-2xl backdrop-blur-xl">
+    <div className="relative z-10 flex justify-center px-4" style={{ paddingTop: "max(env(safe-area-inset-top), 12px)" }}>
+      <div className="mt-2 flex w-full max-w-md items-center gap-2 rounded-2xl border border-ember/40 bg-[#141416]/95 py-1.5 pr-1.5 pl-4 shadow-2xl backdrop-blur-xl" role="status">
         <span className="flex-1 text-[14px]">You copied a coach packet. Ready to paste the reply?</span>
         <button onClick={() => { location.hash = `#/${target.path}`; }} className="min-h-10 rounded-xl bg-ember px-3 text-[14px] font-bold text-black">
           Paste
         </button>
-        <button onClick={() => { clearPending(); setPending(null); }} className="grid h-10 w-9 place-items-center text-faint" aria-label="Dismiss">
+        <button onClick={() => setHiddenFor(pending.copiedAt)} className="grid h-10 w-9 place-items-center text-faint" aria-label="Hide this reminder">
           ×
         </button>
       </div>

@@ -16,6 +16,7 @@ function fieldsOf(p: ProfileFields): ProfileFields {
 export function AboutScreen({ state }: { state: AppState }) {
   const toast = useToast();
   const [draft, setDraft] = useState<ProfileFields>(() => fieldsOf(state.profile ?? EMPTY_PROFILE_FIELDS));
+  const resumable = !!state.onboarding && !state.onboarding.completedAt && state.onboarding.step > 0 && !state.onboarding.resumeHidden;
   const [tab, setTab] = useState<'edit' | 'refine'>(() => (isPending('onboarding', 'profile') ? 'refine' : 'edit'));
 
   return (
@@ -25,12 +26,12 @@ export function AboutScreen({ state }: { state: AppState }) {
         Settings
       </button>
 
-      {!state.profile && (
+      {(!state.profile || resumable) && (
         <div className="mt-4 rounded-3xl border border-ember/40 bg-ember/[0.07] p-5">
-          <p className="text-[17px] font-semibold">No profile yet.</p>
-          <p className="mt-1 text-[15px] text-dim">A 4-minute interview gives your coach real context.</p>
-          <GhostButton className="mt-3 w-full" onClick={() => navigate('onboarding')}>
-            Start the interview
+          <p className="text-[17px] font-semibold">{resumable ? "Your interview is half done." : "No profile yet."}</p>
+          <p className="mt-1 text-[15px] text-dim">{resumable ? "Your answers are saved. Pick up where you left off." : "A 4-minute interview gives your coach real context."}</p>
+          <GhostButton className="mt-3 w-full" onClick={() => navigate("onboarding")}>
+            {resumable ? "Finish the interview" : "Start the interview"}
           </GhostButton>
         </div>
       )}
@@ -73,7 +74,8 @@ export function AboutScreen({ state }: { state: AppState }) {
         )}
         <GhostButton
           onClick={async () => {
-            await saveOnboarding({ step: 1, draft, completedAt: undefined });
+            // A fresh run: new quarter choice, new one-time snapshot, no lingering dismissal.
+            await saveOnboarding({ step: 1, draft, completedAt: undefined, quarterId: undefined, snapshotted: false, dismissedAt: undefined, resumeHidden: false });
             navigate('onboarding');
           }}
         >

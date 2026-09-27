@@ -759,3 +759,29 @@ describe('adversarial: coaching quality', () => {
     expect(line(s, 'CRUNCH history: ')).toContain('Planned: Oct 12 to 16 ("Fine offsite")');
   });
 });
+
+describe('review fix: copy gate false positives with sensitive terms', () => {
+  it('a value-corrected public note naming a sensitive term does not block Copy', async () => {
+    const { packetGate } = await import('../coach/packets');
+    const note = 'Prep calls with the Summit Wealth team';
+    // The packet shows the note redacted; the gate must not call it a private leak.
+    const text = 'notes: Tue "Prep calls with the [redacted] team"';
+    expect(packetGate(text, ['Summit Wealth'], [note], [note]).safe).toBe(true);
+    // A genuinely private note that appears (redacted) and is NOT written publicly is still caught.
+    expect(packetGate(text, ['Summit Wealth'], [note], []).safe).toBe(false);
+  });
+});
+
+describe('review fix: a public text sharing only the opening words does not excuse a cut-off private leak', () => {
+  it('flags the capped prefix of a private note even when a public text shares that prefix', async () => {
+    const { packetGate } = await import('../coach/packets');
+    const terms = ['Summit Wealth', 'Acme Partners'];
+    const pub = 'Call with Summit Wealth about the acquisition terms';
+    const priv = 'Call with Acme Partners about the acquisition terms and my worry that Sarah gets laid off in March';
+    // The packet carries a capped version of the private note (first ~90 chars, redacted).
+    const text = 'notes: Tue "Call with [redacted] about the acquisition terms and my worry that Sarah gets..."';
+    expect(packetGate(text, terms, [priv], [pub]).safe).toBe(false);
+    // The whole private note written publicly (e.g. restated as a win) is still excused.
+    expect(packetGate(text, terms, [priv], [priv]).safe).toBe(true);
+  });
+});

@@ -24,7 +24,7 @@ import {
 } from "@/domain";
 import { now as clockNow } from './clock';
 import { db } from './db';
-import { ensureCurrentQuarter, getSettings } from './repo';
+import { ensureCurrentQuarter, getSettings, type OnboardingProgress } from './repo';
 
 /** Today's lived date, refreshed each minute, on return to the foreground, and on dev time travel. */
 export function useToday(settings: Settings | undefined): string | undefined {
@@ -73,6 +73,8 @@ export interface AppState {
     replies: CoachReply[];
   };
   profile?: Profile;
+  /** Onboarding interview progress (resume point, completion). */
+  onboarding?: OnboardingProgress;
 }
 
 export function useAppState(): AppState | undefined {
@@ -93,7 +95,7 @@ export function useAppState(): AppState | undefined {
       setTimeout(() => void ensureCurrentQuarter(), 0);
       return undefined;
     }
-    const [quarters, allGoals, logs, energy, people, touchpoints, crunch, reviews, actions, replies, profile] = await Promise.all([
+    const [quarters, allGoals, logs, energy, people, touchpoints, crunch, reviews, actions, replies, profile, onboardingRow] = await Promise.all([
       db.quarters.toArray(),
       db.goals.toArray(),
       db.logs.toArray(),
@@ -105,6 +107,7 @@ export function useAppState(): AppState | undefined {
       db.actions.toArray(),
       db.coachReplies.toArray(),
       db.profiles.get("me"),
+      db.kv.get("onboarding"),
     ]);
     const goals = allGoals.filter((g) => g.quarterId === span.id);
     const dashboard = computeDashboard({
@@ -144,6 +147,7 @@ export function useAppState(): AppState | undefined {
         replies: replies.filter((r) => !r.deleted),
       },
       profile: profile && !profile.deleted ? profile : undefined,
+      onboarding: onboardingRow?.value as OnboardingProgress | undefined,
     };
   }, [settings, today, quarterReady]);
 }

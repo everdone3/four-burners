@@ -143,6 +143,7 @@ function Shell() {
     <>
       <Atmosphere heat={heat} focus={isBurner ? (route as { burner: BurnerId }).burner : undefined} />
       <div className="relative z-10 mx-auto min-h-full max-w-xl">
+        <PendingCoachBanner routeName={route.name} />
         <AnimatePresence mode="wait" initial={false}>
           <motion.main
             key={routeKey(route)}
@@ -180,7 +181,6 @@ function Shell() {
 
         <LogSheet open={logOpen} onClose={() => setLogOpen(false)} state={state} />
       </div>
-      <PendingCoachBanner routeName={route.name} />
       <Celebrations />
     </>
   );

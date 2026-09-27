@@ -116,11 +116,11 @@ function sensitiveCandidates(p: ProfileFields, peopleNames: string[]): string[] 
 }
 
 export function OnboardingScreen({ state }: { state: AppState }) {
-  const [loaded, setLoaded] = useState<{ step: number; draft: ProfileFields; quarterId?: string } | null>(null);
+  const [loaded, setLoaded] = useState<Initial | null>(null);
   useEffect(() => {
     getOnboarding().then((o) => {
       const base = state.profile ?? o?.draft ?? EMPTY_PROFILE_FIELDS;
-      setLoaded({ step: o?.completedAt ? 0 : o?.step ?? 0, draft: o?.draft ?? pickFields(base), quarterId: o?.quarterId });
+      setLoaded({ step: o?.completedAt ? 0 : o?.step ?? 0, draft: o?.draft ?? pickFields(base), quarterId: o?.quarterId, snapshotted: o?.snapshotted });
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -132,44 +132,134 @@ function pickFields(p: ProfileFields): ProfileFields {
   return { lifeContext: p.lifeContext, burners: p.burners, travel: p.travel, crunch: p.crunch };
 }
 
-function Flow({ state, initial }: { state: AppState; initial: { step: number; draft: ProfileFields; quarterId?: string } }) {
+interface Initial {
+  step: number;
+  draft: ProfileFields;
+  quarterId?: string;
+  snapshotted?: boolean;
+}
+
+function Flow({ state, initial }: { state: AppState; initial: Initial }) {
   const reduced = useReducedMotion();
   const [step, setStepState] = useState(Math.min(initial.step, STAGES.length - 1));
-  const [draft, setDraft] = useState<ProfileFields>(initial.draft);
-  const [quarterId, setQuarterId] = useState(initial.quarterId ?? defaultFirstQuarter(state.today));
+  const [draft, setDraftState] = useState<ProfileFields>(initial.draft);
+  // A saved quarter choice only counts if it is still the current or next quarter (e.g. a redo later on).
+  const [quarterId, setQuarterId] = useState(() => {
+    const cur = quarterOf(state.today).id;
+    const ok = [cur, nextQuarterId(cur)];
+    return initial.quarterId && ok.includes(initial.quarterId) ? initial.quarterId : defaultFirstQuarter(state.today);
+  });
+  const [people, setPeople] = useState<PersonDraft[] | null>(null);
+  const [privateText, setPrivateText] = useState('');
+  const [privateProblem, setPrivateProblem] = useState<string | null>(null);
+  const snapshotted = useRef(!!initial.snapshotted);
+  // Refs hold the latest values so the debounced autosave never writes a stale step or draft.
+  const draftRef = useRef(draft);
+  const stepRef = useRef(step);
   const saveTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const chooseTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const finishing = useRef(false);
+  const [busy, setBusy] = useState(false);
   const stage = STAGES[step];
   const qIndex = QUESTIONS.findIndex((q) => q.id === stage);
   const q = qIndex >= 0 ? QUESTIONS[qIndex] : null;
 
-  const persist = (next: ProfileFields, nextStep = step) => {
-    clearTimeout(saveTimer.current);
-    saveTimer.current = setTimeout(() => void saveOnboarding({ step: nextStep, draft: next }), 250);
+  const setDraft = (d: ProfileFields) => {
+    const prev = draftRef.current;
+    // Names changed in the answers: rebuild the key people list from them next time.
+    if (prev.burners.family.matters !== d.burners.family.matters || prev.burners.friends.matters !== d.burners.friends.matters) setPeople(null);
+    draftRef.current = d;
+    setDraftState(d);
   };
-  useEffect(() => () => clearTimeout(saveTimer.current), []);
+
+  const persistSoon = () => {
+    clearTimeout(saveTimer.current);
+    saveTimer.current = setTimeout(() => void saveOnboarding({ step: stepRef.current, draft: draftRef.current }), 250);
+  };
+  // Leaving the screen flushes the last keystrokes instead of dropping them.
+  useEffect(
+    () => () => {
+      if (saveTimer.current) {
+        clearTimeout(saveTimer.current);
+        void saveOnboarding({ step: stepRef.current, draft: draftRef.current });
+      }
+    },
+    [],
+  );
 
   const update = (f: Field, v: string) => {
-    const next = setField(draft, f, v);
-    setDraft(next);
-    persist(next);
+    setDraft(setField(draftRef.current, f, v));
+    persistSoon();
   };
 
   const go = (to: number) => {
     sfx.tick();
+    clearTimeout(chooseTimer.current);
+    clearTimeout(saveTimer.current);
+    saveTimer.current = undefined;
+    stepRef.current = to;
     setStepState(to);
-    void saveOnboarding({ step: to, draft });
+    void saveOnboarding({ step: to, draft: draftRef.current });
     window.scrollTo({ top: 0 });
   };
 
-  // Leaving the interview for the review page saves the profile (source: interview).
+  // Leaving the interview for the review page saves the profile (source: interview). The previous
+  // profile is snapshotted once per interview run, so "Restore previous version" keeps the true original.
   const toReview = async () => {
-    await saveProfile(draft, 'interview', { snapshot: !!state.profile, onboarded: true });
+    // Claim the snapshot synchronously so a double tap cannot take a second one, and mark the run even
+    // when there was no earlier profile (a first run has nothing to restore).
+    const snap = !!state.profile && !snapshotted.current;
+    const firstClaim = !snapshotted.current;
+    snapshotted.current = true;
+    await saveProfile(draftRef.current, "interview", { snapshot: snap, onboarded: true });
+    if (firstClaim) await saveOnboarding({ snapshotted: true });
     go(STAGES.indexOf('review'));
+  };
+
+  // Suggestion chips add a name without touching what is typed in the field.
+  const addChip = (name: string) => {
+    if (!termProblem(name)) void saveSettings({ sensitiveTerms: cleanTerms([...state.settings.sensitiveTerms, name]) });
+  };
+
+  const addPrivate = (text: string): boolean => {
+    const incoming = text.split(',').map((t) => t.trim()).filter(Boolean);
+    const bad = incoming.map(termProblem).find(Boolean) ?? null;
+    const ok = incoming.filter((t) => !termProblem(t));
+    if (ok.length) void saveSettings({ sensitiveTerms: cleanTerms([...state.settings.sensitiveTerms, ...ok]) });
+    setPrivateProblem(bad);
+    if (!bad) setPrivateText('');
+    return !bad;
   };
 
   const next = async () => {
     if (q && qIndex === QUESTIONS.length - 1) return toReview();
+    // A name typed but not added yet still counts; a rejected name keeps you here with the reason.
+    if (stage === 'private' && privateText.trim() && !addPrivate(privateText)) return;
     go(step + 1);
+  };
+
+  const existing = new Set(state.data.people.map((p) => p.name.toLowerCase()));
+  const rows =
+    people ?? [...parsePeople(draft.burners.family.matters, 'family').people, ...parsePeople(draft.burners.friends.matters, 'friends').people];
+  const seenNames = new Set<string>();
+  const pendingPeople = rows.filter((r) => {
+    const k = r.name.trim().toLowerCase();
+    if (!r.include || !k || existing.has(k) || seenNames.has(k)) return false;
+    seenNames.add(k);
+    return true;
+  });
+
+  const finish = async () => {
+    // One run only: a double tap must not add the same people twice.
+    if (finishing.current) return;
+    finishing.current = true;
+    setBusy(true);
+    // Everyone marked Keep becomes a key person; nothing is dropped by the main button.
+    for (const r of pendingPeople) await addPerson({ name: r.name.trim(), burner: r.burner, cadenceDays: r.cadenceDays });
+    await saveOnboarding({ quarterId, completedAt: new Date().toISOString(), step: 0 });
+    // Ask the browser to keep this app's data (granted readily to Home Screen apps).
+    void navigator.storage?.persist?.();
+    navigate(`setup/${quarterId}`, { replace: true });
   };
 
   return (
@@ -181,7 +271,15 @@ function Flow({ state, initial }: { state: AppState; initial: { step: number; dr
             Back
           </button>
           {q ? <StepEmbers count={QUESTIONS.length} current={qIndex} /> : <span />}
-          <button onClick={() => { void saveOnboarding({ dismissedAt: new Date().toISOString() }); navigate('', { replace: true }); }} className="h-11 px-2 text-[15px] text-faint">
+          <button
+            onClick={() => {
+              clearTimeout(saveTimer.current);
+              saveTimer.current = undefined;
+              void saveOnboarding({ step: stepRef.current, draft: draftRef.current, dismissedAt: new Date().toISOString() });
+              navigate('', { replace: true });
+            }}
+            className="h-11 px-2 text-[15px] text-faint"
+          >
             Later
           </button>
         </header>
@@ -197,21 +295,44 @@ function Flow({ state, initial }: { state: AppState; initial: { step: number; dr
           className="flex-1"
         >
           {stage === 'welcome' && <Welcome onBegin={() => go(1)} />}
-          {q && <QuestionScreen q={q} value={getField(draft, q.field)} onChange={(v) => update(q.field, v)} onChoose={(v) => { update(q.field, v); setTimeout(() => void next(), 250); }} />}
-          {stage === 'review' && <ReviewProfile draft={draft} onChange={(d) => { setDraft(d); persist(d); void saveProfile(d, 'edited'); }} />}
-          {stage === 'private' && <PrivateNames state={state} draft={draft} />}
+          {q && (
+            <QuestionScreen
+              q={q}
+              value={getField(draft, q.field)}
+              onChange={(v) => update(q.field, v)}
+              onChoose={(v) => {
+                // Save the choice with the step change in one write, then move on.
+                setDraft(setField(draftRef.current, q.field, v));
+                clearTimeout(chooseTimer.current);
+                chooseTimer.current = setTimeout(() => go(stepRef.current + 1), 220);
+              }}
+            />
+          )}
+          {stage === 'review' && (
+            <ReviewProfile
+              draft={draft}
+              onChange={(d) => {
+                setDraft(d);
+                persistSoon();
+                void saveProfile(d, 'edited');
+              }}
+            />
+          )}
+          {stage === 'private' && (
+            <PrivateNames state={state} draft={draft} text={privateText} onText={(t) => { setPrivateText(t); setPrivateProblem(null); }} problem={privateProblem} onAdd={addPrivate} onChip={addChip} />
+          )}
           {stage === 'refine' && (
             <Refine
               state={state}
               draft={draft}
               onReplaced={(d) => {
                 setDraft(d);
-                persist(d);
+                persistSoon();
               }}
             />
           )}
-          {stage === "quarter" && <PickQuarter today={state.today} chosen={quarterId} onPick={setQuarterId} />}
-          {stage === 'people' && <KeyPeople state={state} draft={draft} />}
+          {stage === 'quarter' && <PickQuarter today={state.today} chosen={quarterId} onPick={setQuarterId} />}
+          {stage === 'people' && <KeyPeople rows={rows} setRows={setPeople} existing={existing} />}
         </motion.div>
       </AnimatePresence>
 
@@ -224,17 +345,8 @@ function Flow({ state, initial }: { state: AppState; initial: { step: number; dr
               </GhostButton>
             )}
             {stage === 'people' ? (
-              <MoltenButton
-                className="h-15 flex-1 text-[18px]"
-                onClick={async () => {
-                  await saveOnboarding({ quarterId });
-                  await saveOnboarding({ completedAt: new Date().toISOString(), step: 0 });
-                  // Ask the browser to keep this app's data (granted readily to Home Screen apps).
-                  void navigator.storage?.persist?.();
-                  navigate(`setup/${quarterId}`, { replace: true });
-                }}
-              >
-                Set up {quarterLabel(quarterId)}
+              <MoltenButton className="h-15 flex-1 text-[18px]" disabled={busy} onClick={() => void finish()}>
+                {pendingPeople.length ? `Add ${pendingPeople.length} and set up ${quarterLabel(quarterId)}` : `Set up ${quarterLabel(quarterId)}`}
               </MoltenButton>
             ) : (
               q?.kind !== 'choice' && (
@@ -404,12 +516,26 @@ export function ReviewProfile({ draft, onChange }: { draft: ProfileFields; onCha
   );
 }
 
-function PrivateNames({ state, draft }: { state: AppState; draft: ProfileFields }) {
+function PrivateNames({
+  state,
+  draft,
+  text,
+  onText,
+  problem,
+  onAdd,
+  onChip,
+}: {
+  state: AppState;
+  draft: ProfileFields;
+  text: string;
+  onText: (t: string) => void;
+  problem: string | null;
+  onAdd: (text: string) => boolean;
+  onChip: (name: string) => void;
+}) {
   const terms = state.settings.sensitiveTerms;
-  const [text, setText] = useState('');
   const peopleNames = [...parsePeople(draft.burners.family.matters, 'family').people, ...parsePeople(draft.burners.friends.matters, 'friends').people].map((p) => p.name);
   const candidates = sensitiveCandidates(draft, peopleNames).filter((c) => !terms.some((t) => t.toLowerCase() === c.toLowerCase()));
-  const add = (list: string[]) => void saveSettings({ sensitiveTerms: cleanTerms([...terms, ...list.filter((t) => !termProblem(t.trim()))]) });
   return (
     <div className="mt-4">
       <div className="text-[12px] font-bold tracking-[0.22em] text-ember uppercase">Private names</div>
@@ -422,7 +548,7 @@ function PrivateNames({ state, draft }: { state: AppState; draft: ProfileFields 
           <div className="mb-2 text-[12px] font-semibold tracking-[0.14em] text-dim uppercase">From your answers, tap to add</div>
           <div className="flex flex-wrap gap-2">
             {candidates.map((c) => (
-              <button key={c} onClick={() => add([c])} className="min-h-10 rounded-full px-3.5 text-[14px] text-amber-100" style={{ boxShadow: 'inset 0 0 0 1px rgba(252,211,77,0.4)' }}>
+              <button key={c} onClick={() => onChip(c)} className="min-h-10 rounded-full px-3.5 text-[14px] text-amber-100" style={{ boxShadow: 'inset 0 0 0 1px rgba(252,211,77,0.4)' }}>
                 + {c}
               </button>
             ))}
@@ -443,16 +569,23 @@ function PrivateNames({ state, draft }: { state: AppState; draft: ProfileFields 
         className="mt-3 flex gap-2"
         onSubmit={(e) => {
           e.preventDefault();
-          if (!text.trim()) return;
-          add(text.split(','));
-          setText('');
+          if (text.trim()) onAdd(text);
         }}
       >
-        <input className={inputClass} value={text} onChange={(e) => setText(e.target.value)} placeholder="Add a name (commas for several)" autoCapitalize="words" autoComplete="off" />
+        <input
+          className={inputClass}
+          value={text}
+          onChange={(e) => onText(e.target.value)}
+          placeholder="Add a name (commas for several)"
+          aria-label="Name to keep private"
+          autoCapitalize="words"
+          autoComplete="off"
+        />
         <button type="submit" disabled={!text.trim()} className="shrink-0 rounded-2xl bg-ember/15 px-4 text-[16px] font-bold text-ember disabled:opacity-30">
           Add
         </button>
       </form>
+      {problem && <p className="mt-2 text-[13px] text-amber-200">{problem}</p>}
     </div>
   );
 }
@@ -555,34 +688,31 @@ function PickQuarter({ today, chosen, onPick }: { today: string; chosen: string;
   );
 }
 
-function KeyPeople({ state, draft }: { state: AppState; draft: ProfileFields }) {
-  const toast = useToast();
-  const existing = new Set(state.data.people.map((p) => p.name.toLowerCase()));
-  const parsedFamily = useMemo(() => parsePeople(draft.burners.family.matters, 'family'), [draft.burners.family.matters]);
-  const parsedFriends = useMemo(() => parsePeople(draft.burners.friends.matters, 'friends'), [draft.burners.friends.matters]);
-  const [rows, setRows] = useState<PersonDraft[]>(() => [...parsedFamily.people, ...parsedFriends.people]);
-  const leftovers = [...parsedFamily.leftovers, ...parsedFriends.leftovers];
-  const [done, setDone] = useState(false);
-  const update = (i: number, patch: Partial<PersonDraft>) => setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
-
+function KeyPeople({ rows, setRows, existing }: { rows: PersonDraft[]; setRows: (r: PersonDraft[]) => void; existing: Set<string> }) {
+  const update = (i: number, patch: Partial<PersonDraft>) => setRows(rows.map((r, j) => (j === i ? { ...r, ...patch } : r)));
   return (
     <div className="mt-4">
       <div className="text-[12px] font-bold tracking-[0.22em] text-ember uppercase">Key people</div>
       <h1 className="mt-1 font-display text-[36px] leading-tight font-black">The people you named</h1>
-      <p className="mt-2 text-[16px] text-dim">Confirm who to keep close and how often. You will see gentle cues as someone comes due.</p>
+      <p className="mt-2 text-[16px] text-dim">Keep who matters and set how often. Everyone marked Keep is added when you continue.</p>
       <div className="mt-5 space-y-2">
         {rows.map((r, i) => {
           const p = PALETTES[r.burner];
-          const already = existing.has(r.name.toLowerCase());
+          const already = existing.has(r.name.trim().toLowerCase());
           return (
             <div key={i} className="rounded-2xl border bg-[#0a0a0c]/90 p-3.5" style={{ borderColor: r.include && !already ? `${p.mid}55` : 'rgba(255,255,255,0.08)', opacity: r.include ? 1 : 0.55 }}>
               <div className="flex items-center gap-2">
                 <MiniFlame burner={r.burner} size={18} />
-                <input className="min-w-0 flex-1 bg-transparent text-[17px] font-semibold outline-none" value={r.name} onChange={(e) => update(i, { name: e.target.value })} aria-label="Name" />
+                <input className="min-w-0 flex-1 bg-transparent text-[17px] font-semibold outline-none" value={r.name} onChange={(e) => update(i, { name: e.target.value })} aria-label="Name" placeholder="Name" />
                 {already ? (
-                  <span className="text-[12px] text-faint">Already added</span>
+                  <span className="text-[12px] text-faint">Added</span>
                 ) : (
-                  <button onClick={() => update(i, { include: !r.include })} className="min-h-9 rounded-full px-3 text-[13px] font-semibold" style={{ color: r.include ? p.core : 'rgba(255,255,255,0.5)' }}>
+                  <button
+                    onClick={() => update(i, { include: !r.include })}
+                    aria-pressed={r.include}
+                    className="min-h-9 rounded-full px-3 text-[13px] font-semibold"
+                    style={{ color: r.include ? p.core : 'rgba(255,255,255,0.5)' }}
+                  >
                     {r.include ? '✓ Keep' : 'Skip'}
                   </button>
                 )}
@@ -592,6 +722,7 @@ function KeyPeople({ state, draft }: { state: AppState; draft: ProfileFields }) 
                   <button
                     key={c.days}
                     onClick={() => update(i, { cadenceDays: c.days })}
+                    aria-pressed={r.cadenceDays === c.days}
                     className="min-h-8 rounded-full px-2.5 text-[12px]"
                     style={r.cadenceDays === c.days ? { background: `${p.mid}33`, color: p.core, boxShadow: `inset 0 0 0 1px ${p.mid}` } : { boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.1)', color: 'rgba(255,255,255,0.6)' }}
                   >
@@ -607,26 +738,9 @@ function KeyPeople({ state, draft }: { state: AppState; draft: ProfileFields }) 
         })}
         {rows.length === 0 && <p className="rounded-2xl border border-dashed border-line px-4 py-5 text-center text-[15px] text-dim">No names yet. Add people anytime from the Family and Friends burners.</p>}
       </div>
-      {leftovers.length > 0 && <p className="mt-3 text-[13px] text-faint">Did we miss anyone? You also said: {leftovers.join('; ')}</p>}
-      <div className="mt-4 flex gap-2">
-        <GhostButton className="flex-1" onClick={() => setRows((rs) => [...rs, { name: 'New person', burner: 'friends', cadenceDays: 30, include: true }])}>
-          + Add someone
-        </GhostButton>
-        <PrimaryButton
-          className="flex-1"
-          disabled={done || !rows.some((r) => r.include && r.name.trim() && !existing.has(r.name.toLowerCase()))}
-          onClick={async () => {
-            for (const r of rows) {
-              if (!r.include || !r.name.trim() || existing.has(r.name.toLowerCase())) continue;
-              await addPerson({ name: r.name.trim(), burner: r.burner, cadenceDays: r.cadenceDays });
-            }
-            setDone(true);
-            toast({ message: 'People added' });
-          }}
-        >
-          {done ? '✓ Added' : 'Add these people'}
-        </PrimaryButton>
-      </div>
+      <GhostButton className="mt-4 w-full" onClick={() => setRows([...rows, { name: '', burner: 'friends', cadenceDays: 30, include: true }])}>
+        + Add someone
+      </GhostButton>
     </div>
   );
 }

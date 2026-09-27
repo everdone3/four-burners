@@ -12,7 +12,7 @@ import {
   type WeeklyAction,
   type WeeklyReview,
 } from '@/domain';
-import { endCrunch, startCrunch, toggleAction } from '@/data/repo';
+import { endCrunch, saveOnboarding, startCrunch, toggleAction } from '@/data/repo';
 import { celebrate } from '../fx/Celebrations';
 import { sfx } from '../fx/audio';
 import { haptic } from '../fx/haptics';
@@ -288,33 +288,47 @@ export function CrunchBanner({ crunch, onOpen }: { crunch: CrunchPeriod; onOpen:
 
 // ---------- Coach ----------
 
-export function CoachCard({ hasProfile }: { hasProfile: boolean }) {
-  if (!hasProfile) {
-    return (
-      <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
-        <GlowCard color="#c4a3ff" intensity={0.8} className="bg-black/65 backdrop-blur-xl">
-          <button onClick={() => navigate('onboarding')} className="flex w-full items-center gap-4 px-5 py-4 text-left">
-            <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-[28px]" style={{ background: 'radial-gradient(circle at 50% 30%, rgba(196,163,255,0.35), rgba(100,33,214,0.12))' }}>
-              🧭
-            </span>
-            <span className="min-w-0 flex-1">
-              <span className="block text-[12px] font-bold tracking-[0.2em] text-[#c4a3ff] uppercase">Meet your coach</span>
-              <span className="block font-display text-[21px] font-bold">Tell it who you are</span>
-              <span className="block text-[13px] text-dim">A 4-minute interview. Talk or type.</span>
-            </span>
-            <span className="text-[26px] text-[#c4a3ff]">›</span>
-          </button>
-        </GlowCard>
-      </motion.section>
-    );
-  }
-  return (
+export function CoachCard({ hasProfile, resumable }: { hasProfile: boolean; /** Onboarding started but not finished. */ resumable?: boolean }) {
+  const checkIn = (
     <button
       onClick={() => navigate('checkin')}
       className="mt-4 flex h-12 w-full items-center justify-center gap-2 rounded-2xl border border-white/10 bg-black/55 text-[15px] font-semibold text-white/85 backdrop-blur"
     >
       <span aria-hidden>🧭</span> Coach check-in: where do I stand?
     </button>
+  );
+  if (hasProfile && !resumable) return checkIn;
+  return (
+    <>
+      <motion.section initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} className="mt-6">
+        <GlowCard color="#c4a3ff" intensity={0.8} className="bg-black/65 backdrop-blur-xl">
+          <div className="flex items-center">
+            <button onClick={() => navigate('onboarding')} className="flex min-w-0 flex-1 items-center gap-4 py-4 pl-5 text-left">
+              <span className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl text-[28px]" style={{ background: 'radial-gradient(circle at 50% 30%, rgba(196,163,255,0.35), rgba(100,33,214,0.12))' }}>
+                🧭
+              </span>
+              <span className="min-w-0 flex-1">
+                <span className="block text-[12px] font-bold tracking-[0.2em] text-[#c4a3ff] uppercase">{resumable ? 'Finish setting up' : 'Meet your coach'}</span>
+                <span className="block font-display text-[21px] font-bold">{resumable ? 'Pick up where you left off' : 'Tell it who you are'}</span>
+                <span className="block text-[13px] text-dim">{resumable ? 'Your answers are saved.' : 'A 4-minute interview. Talk or type.'}</span>
+              </span>
+            </button>
+            {resumable && hasProfile ? (
+              <button
+                onClick={() => void saveOnboarding({ resumeHidden: true })}
+                className="grid h-14 w-12 shrink-0 place-items-center text-[22px] text-faint"
+                aria-label="Hide this reminder"
+              >
+                ×
+              </button>
+            ) : (
+              <span className="pr-5 text-[26px] text-[#c4a3ff]" aria-hidden>›</span>
+            )}
+          </div>
+        </GlowCard>
+      </motion.section>
+      {hasProfile && checkIn}
+    </>
   );
 }
 

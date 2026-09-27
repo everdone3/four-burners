@@ -7,7 +7,8 @@
 //   built before the tap.
 // - Copying and opening Claude are two taps: navigating after an awaited copy would no longer count
 //   as a user tap, and universal links would be ignored.
-// - https://claude.ai/new is a universal link into the Claude app (listed in claude.ai's
+// - https://claude.ai/new is a universal link into the Claude app (verified on the user's iPhone
+//   from the installed app, Sep 2026; listed in claude.ai's
 //   apple-app-site-association). claude://claude.ai/new is a backup that shows an iOS "Open?" prompt.
 // - No text ever travels in a URL: chat prefill on mobile is undocumented, and URLs end up in logs.
 import type { BuiltPacket } from '@/domain/coach/packets';

@@ -553,15 +553,22 @@ export interface OnboardingProgress {
   completedAt?: string;
   /** Set when "Later" is tapped, so first launch stops auto-opening the interview. */
   dismissedAt?: string;
+  /** Whether this interview run already snapshotted the previous profile. */
+  snapshotted?: boolean;
+  /** Set when the user hides the "Finish setting up" card for an unfinished run that has a profile. */
+  resumeHidden?: boolean;
 }
 
 export async function getOnboarding(): Promise<OnboardingProgress | undefined> {
   return (await db.kv.get(ONBOARDING_KEY))?.value as OnboardingProgress | undefined;
 }
 
+/** Merge into the saved progress in one transaction, so overlapping autosaves never drop a flag. */
 export async function saveOnboarding(patch: Partial<OnboardingProgress>): Promise<void> {
-  const cur = (await getOnboarding()) ?? { step: 0, draft: EMPTY_PROFILE_FIELDS };
-  await db.kv.put({ key: ONBOARDING_KEY, value: { ...cur, ...patch }, updatedAt: nowIso() });
+  await db.transaction('rw', db.kv, async () => {
+    const cur = ((await db.kv.get(ONBOARDING_KEY))?.value as OnboardingProgress | undefined) ?? { step: 0, draft: EMPTY_PROFILE_FIELDS };
+    await db.kv.put({ key: ONBOARDING_KEY, value: { ...cur, ...patch }, updatedAt: nowIso() });
+  });
 }
 
 // ---------- Coach replies ----------
