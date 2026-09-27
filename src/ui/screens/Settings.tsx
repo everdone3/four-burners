@@ -6,6 +6,8 @@ import { hasSampleData, loadSampleData, wipeSampleData } from '@/data/sample';
 import { GhostButton, useToast } from '../components/ui';
 import { SensitiveTermsEditor } from '../components/Sensitive';
 import { SyncPanel } from '../components/SyncPanel';
+import { LockSettings } from '../components/LockSettings';
+import { LockDiagnostics } from '../components/LockDiagnostics';
 import { BackupPanel } from '../components/BackupPanel';
 import { AppVersionRow } from '../components/AppVersionRow';
 import { eraseDeviceSync, getSyncStatus, subscribeSyncStatus, syncNow } from '@/sync/manager';
@@ -129,6 +131,11 @@ export function SettingsScreen({ state }: { state: AppState }) {
         <SyncPanel />
       </Section>
 
+      {/* The Face ID lock: an access gate for this device, not encryption (see src/lock/webauthnLocal.ts). */}
+      <Section title="App lock">
+        <LockSettings />
+      </Section>
+
       <Section title="Backup">
         <BackupPanel />
       </Section>
@@ -205,6 +212,11 @@ export function SettingsScreen({ state }: { state: AppState }) {
                 setSyncingFirst(false);
                 setBusy(false);
               }
+              // The app lock is left as it is. It is a setting of this device, not data: it lives outside
+              // the database, and erasing the data is not a request to drop the protection (turning the
+              // lock off is one tap in App lock above, and asks for Face ID). This screen is only reachable
+              // unlocked anyway. The lock screen's "Reset this device" and the error screen's erase do
+              // remove it, because there the lock is what stands between you and a fresh start.
               if (confirm(eraseConfirmText(left)))
                 void run(async () => {
                   await eraseDeviceSync();
@@ -229,6 +241,10 @@ export function SettingsScreen({ state }: { state: AppState }) {
               Back to the real date
             </GhostButton>
           </div>
+        </div>
+
+        <div className="mt-5 border-t border-white/[0.08] pt-3">
+          <LockDiagnostics />
         </div>
       </Section>
     </div>

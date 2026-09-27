@@ -5,6 +5,18 @@ import { useReducedMotion, spring } from '../motion';
 
 // ---------- Bottom sheet ----------
 
+/**
+ * Whether Escape may close a sheet. A sheet behind the lock screen must stay open, or what was typed in it
+ * is lost: one inside the inert app layer, and, while <html data-lock="locked"> is set, any sheet outside
+ * #lock-layer (a sheet portaled straight into <body> has no inert ancestor). Sheets on the lock screen
+ * itself (recovery) still close. `el` is the sheet's own root; null counts as "not on the lock screen".
+ */
+export function escapeClosesSheet(el: Pick<Element, 'closest'> | null | undefined, lockAttr: string | null | undefined): boolean {
+  if (el?.closest('[inert]')) return false;
+  if (lockAttr === 'locked' && !el?.closest('#lock-layer')) return false;
+  return true;
+}
+
 export function Sheet({
   open,
   onClose,
@@ -19,16 +31,21 @@ export function Sheet({
   labelledBy?: string;
 }) {
   const reduced = useReducedMotion();
+  const root = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    // A sheet behind the lock screen must not close, or its typed text is lost (escapeClosesSheet). The lock
+    // attribute is read at the key press: the app can lock while the sheet stays open.
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && escapeClosesSheet(root.current, document.documentElement.getAttribute('data-lock'))) onClose();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [open, onClose]);
   return (
     <AnimatePresence>
       {open && (
-        <div className="fixed inset-0 z-40">
+        <div ref={root} className="fixed inset-0 z-40">
           <motion.div
             className="absolute inset-0 bg-black/70 backdrop-blur-sm"
             initial={{ opacity: 0 }}

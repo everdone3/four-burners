@@ -95,3 +95,64 @@
 .has-banner .pt-safe {
   padding-top: 8px;
 }
+
+/* ---------------------------------------------------------------------------------------------------
+   App lock and privacy shield. src/lock/controller.ts sets the attributes on <html>; the inline script in
+   index.html sets data-lock before anything paints. The UI renders the app in #app-layer and the lock
+   screen in #lock-layer, both inside #root.
+   The Face ID lock is an access gate, not encryption (src/lock/webauthnLocal.ts): these rules only decide
+   what paints. The data stays readable to anything that can run script here or read the device's storage.
+   --------------------------------------------------------------------------------------------------- */
+
+/* Locked: the app never paints. visibility rather than display, so layout, scroll position and running
+   state survive a re-lock, and nothing inside can be tapped, focused or read aloud by VoiceOver. The
+   universal rule beats any descendant that sets visibility: visible. Sheets portaled straight into <body>
+   are hidden too. */
+html[data-lock='locked'] #app-layer,
+html[data-lock='locked'] #app-layer *,
+html[data-lock='locked'] body > :not(#root),
+html[data-lock='locked'] body > :not(#root) * {
+  visibility: hidden !important;
+}
+html[data-lock='locked'] #lock-layer {
+  visibility: visible;
+}
+
+/* Shield (html[data-shield], set synchronously when the page is hidden, cleared on return unless the app
+   locks): one fixed layer over everything that blurs and dims the app, sheets in <body> included. On with
+   no transition, so the first frame after returning is covered; a short fade when it clears. A layer
+   instead of a filter on #app-layer, because a filter would re-anchor every position: fixed element inside
+   the app (bars, sheets, toasts) while it runs. Not drawn while locked: the lock screen covers the app. */
+#root::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: 2147483000;
+  pointer-events: none;
+  visibility: hidden;
+  opacity: 0;
+  background:
+    radial-gradient(120% 70% at 50% 38%, rgb(255 150 60 / 0.14), transparent 70%),
+    rgb(0 0 0 / 0.55);
+  -webkit-backdrop-filter: blur(28px) saturate(0.6);
+  backdrop-filter: blur(28px) saturate(0.6);
+  transition:
+    opacity 220ms ease-out,
+    visibility 0s linear 220ms;
+}
+html[data-shield]:not([data-lock='locked']) #root::after {
+  visibility: visible;
+  opacity: 1;
+  transition: none;
+}
+/* No blur available: dim almost to black instead, so nothing stays readable. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  #root::after {
+    background: rgb(0 0 0 / 0.94);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  #root::after {
+    transition: none;
+  }
+}

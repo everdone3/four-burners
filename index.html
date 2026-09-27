@@ -3,6 +3,13 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+    <!-- App lock: when this device has a Face ID lock for this address, hide the app before anything paints
+         (src/lock/controller.ts takes over at boot). An access gate, not encryption: see src/lock/webauthnLocal.ts.
+         Same test as readRecord in src/lock/store.ts. Static on purpose, so a CSP hash for it never changes.
+         let, not var: a block-scoped name, so no window.r global. -->
+    <script>
+      try{let r=JSON.parse(localStorage.getItem('fb-lock')||'null');if(r&&r.v===1&&r.rpId===location.hostname)document.documentElement.dataset.lock='locked'}catch(e){}
+    </script>
     <meta name="theme-color" content="#000000" />
     <meta name="color-scheme" content="dark" />
     <meta name="apple-mobile-web-app-capable" content="yes" />

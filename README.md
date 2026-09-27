@@ -11,7 +11,7 @@ A private, offline-first goal tracker built on the Four Burners theory. Installa
 - [x] Phase 3: Rhythm (weekly review, actions, habit streaks, Travel/Crunch, time zones, proration notes, quarter close, archive)
 - [x] Phase 4: Coach and onboarding (interview + About me, 4 packet types, redaction, copy and paste loop, saved replies)
 - [x] Phase 5: Sync (email-code sign-in, offline-first sync, JSON backups, offline app shell)
-- [ ] Phase 6: Security
+- [x] Phase 6: Security (Face ID lock with a passkey, idle re-lock, blur when leaving the app)
 - [ ] Phase 7: Notifications
 - [ ] Phase 8: Shortcuts
 - [ ] Phase 9: Calendar-aware crunch mode
@@ -101,6 +101,31 @@ Settings > Backup > **Save a backup to Files** makes one JSON file with everythi
 iPad it opens the share sheet: choose **Save to Files**. On a Mac it downloads. A card on Home reminds you
 once a month. **Restore from a backup** merges a file back in: nothing is deleted, and anything newer on the
 device is kept.
+
+## App lock (Face ID)
+
+Settings > App lock > **Lock with Face ID** (Touch ID on a Mac). iOS asks for Face ID twice the first time:
+once to create a passkey named "Four Burners lock · iPhone" in your Passwords, once to test it. Each device
+sets up its own lock. After that:
+
+- Opening the app asks for Face ID (the prompt usually appears on its own; otherwise tap **Unlock**).
+- It locks again after the time you choose (Immediately, 1, 5, 15 or 60 minutes away or without a tap).
+  **Lock now** locks right away. App updates never lock you out mid-use.
+- The app blurs the moment you leave it.
+
+What it is and is not: the lock is an **access gate, not encryption**. It keeps someone holding your unlocked
+phone from casually opening the app. Your data is stored unencrypted on the device, as before. iOS takes the
+app switcher preview before any web app can react, so that preview can still show your screen; coming back
+to the app never shows your content before the blur or the lock screen.
+
+If Face ID keeps failing, tap **Can't unlock?** on the lock screen:
+1. **Restore the passkey** if it was deleted: Passwords app > Recently Deleted > "Four Burners lock".
+2. **Sign in with an email code** (when this device is signed in to sync). This turns the lock off; turn it on
+   again in Settings to make a new passkey.
+3. **Reset this device**: erases the data on this device (your synced account keeps its copy).
+
+Turning the lock off asks for Face ID first. To remove the passkey afterwards: Passwords app > search
+"Four Burners" > Delete. Settings > Developer > Lock diagnostics shows a log of lock events for troubleshooting.
 
 ## Offline and updates
 

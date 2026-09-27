@@ -8,7 +8,14 @@
 // iOS resumes Home Screen apps without a navigation, so the browser never looks for updates on its own:
 // check on resume, on back/forward cache restores, when the network returns, and hourly.
 // Production builds only: in dev and in tests the service worker is never registered and all of this is inert.
+//
+// The app lock (src/lock; an access gate, not encryption: see src/lock/webauthnLocal.ts): every reload
+// the app starts goes through reloadApp(), which marks it trusted so the lock follows the idle rule instead
+// of locking you out mid-use. The lock screen itself counts as a safe point for a silent update: a reload
+// while locked is not marked, so it comes back locked (and a Face ID prompt in flight holds busy.ts). The
+// recovery sheet is a dialog with a code field, so it is not a safe point, like any other sheet.
 import { useEffect, useSyncExternalStore } from 'react';
+import { getLockState, markTrustedReload } from '@/lock/controller';
 import { isBusy, onIdle } from './busy';
 
 declare global {
@@ -86,6 +93,21 @@ export function isUpdateSafePoint(): boolean {
 }
 
 /**
+ * Every reload the app starts itself (an update here, a database upgrade in main.tsx). Marked trusted
+ * only while unlocked: a marked reload may come back unlocked (within the idle time), so a reload from the
+ * lock screen (after "Lock now", say) stays unmarked and comes back locked. With the lock off there is
+ * nothing to skip, so nothing is marked. The lock can never block a reload.
+ */
+export function reloadApp() {
+  try {
+    if (getLockState().phase === 'unlocked') markTrustedReload();
+  } catch {
+    // The lock failed: reload unmarked, which comes back locked if a lock is set up.
+  }
+  location.reload();
+}
+
+/**
  * Switch to the waiting version now. The page reloads once the new service worker takes over.
  * auto: the app started it, not a tap, so the reload itself also waits until nothing would be lost.
  */
@@ -101,7 +123,7 @@ export function applyUpdate(announce = true, auto = false) {
   }
   setStatus('applying');
   if (reloadPending) {
-    location.reload();
+    reloadApp();
     return;
   }
   void applyFn?.();
@@ -181,7 +203,7 @@ function onControllerChange() {
   reloadPending = true;
   // You tapped Reload, or nothing would be lost or interrupted: reload into the new version now.
   if ((status === 'applying' && !autoApplying) || canApplyNow()) {
-    location.reload();
+    reloadApp();
     return;
   }
   // Another tab switched versions, or something started since this tab began applying (typing, a share
