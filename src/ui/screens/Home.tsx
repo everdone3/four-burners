@@ -11,6 +11,7 @@ import { PALETTES } from '../theme';
 import { STATUS_COLOR, STATUS_LABEL } from '../labels';
 import { sfx } from '../fx/audio';
 import { haptic } from '../fx/haptics';
+import { BackupReminderCard } from '../components/BackupReminderCard';
 import { useReducedMotion } from '../motion';
 
 // The ignition sequence plays once per app launch, not every time you return home.
@@ -87,6 +88,7 @@ export function Home({ state }: { state: AppState }) {
 
       <ReviewCard today={today} reviewDay={state.settings.reviewDay} reviews={state.data.reviews} />
       <CoachCard hasProfile={!!state.profile} resumable={!!state.onboarding && !state.onboarding.completedAt && state.onboarding.step > 0 && !state.onboarding.resumeHidden} />
+      <BackupReminderCard />
 
       <section className="mt-6 grid grid-cols-2 gap-3.5">
         {BURNERS.map((b, i) => {

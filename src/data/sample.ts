@@ -2,6 +2,7 @@
 // Every sample record id starts with "sample-" so it can be wiped without touching real data.
 import {
   BURNERS,
+  DEFAULT_INTENTS,
   addDays,
   computeDashboard,
   dateRange,
@@ -32,6 +33,7 @@ import {
 } from "@/domain";
 import { db } from './db';
 import { currentToday, getSettings } from './repo';
+import { SEED_UPDATED_AT, isSeedStamp } from '@/sync/types';
 
 const SAMPLE_QUARTERS_KEY = 'sampleQuarters';
 const OFFSET = -240; // EDT
@@ -293,15 +295,19 @@ export async function loadSampleData(): Promise<void> {
   // Weekly reviews (wins, misses, focus) and the actions they created, including this week's.
   const { reviews, actions, replies } = sampleRituals(quarterSpan(previous).start, today, [...prev.crunch, ...cur.crunch]);
 
-  // Quarters with real goals are left alone; empty ones (e.g. auto-created) get the sample setup.
+  // Only missing quarters, or untouched auto-created ones (seeds), get the sample setup. A quarter with real
+  // goals, or one set up here or on another device (theme, intents), is left alone; sample records go alongside.
   const realGoals = await db.goals.filter((g) => !g.id.startsWith('sample-') && !g.deleted).toArray();
   const existingQuarters = new Set(realGoals.map((g) => g.quarterId));
-  const createdQuarters = [previous, current].filter((id) => !existingQuarters.has(id));
+  const present = new Map((await db.quarters.toArray()).map((q) => [q.id, q]));
+  const createdQuarters = [previous, current].filter((id) => {
+    const q = present.get(id);
+    return !existingQuarters.has(id) && (!q || (isSeedStamp(q.updatedAt) && !q.setupAt));
+  });
 
   await db.transaction('rw', db.tables, async () => {
-    // If a real current quarter exists, keep its intents and theme; add sample records alongside.
     for (const g of [prev, cur]) {
-      if (!existingQuarters.has(g.quarter.id)) await db.quarters.put(g.quarter);
+      if (createdQuarters.includes(g.quarter.id)) await db.quarters.put(g.quarter);
       await db.goals.bulkPut(g.goals);
       await db.logs.bulkPut(g.logs);
       await db.energy.bulkPut(g.energy);
@@ -445,7 +451,9 @@ export async function wipeSampleData(): Promise<void> {
     // Anything you logged against a sample goal or person goes with it.
     const sampleGoals = new Set((await db.goals.filter(isSample).primaryKeys()) as string[]);
     const samplePeople = new Set((await db.people.filter(isSample).primaryKeys()) as string[]);
-    // Keep any quarter you have since added real goals to.
+    // Quarters the sample loader created go too, except one you have since added real goals to. That one
+    // stays only as an untouched auto-created quarter (below), so no sample theme, intents or history ever
+    // turn into real data that syncs.
     const realGoalQuarters = new Set(
       (await db.goals.filter((g) => !isSample(g) && !g.deleted).toArray()).map((g) => g.quarterId),
     );
@@ -461,7 +469,18 @@ export async function wipeSampleData(): Promise<void> {
       db.coachReplies.filter(isSample).delete(),
       db.quarters.bulkDelete(createdQuarters.filter((q) => !realGoalQuarters.has(q))),
       db.kv.delete(SAMPLE_QUARTERS_KEY),
+      // While sample data was loaded, pulls skipped server rows for the sample quarters but moved past them.
+      // Forget the pull position so the next sync re-reads everything (last write wins, so this is safe).
+      db.kv.where('key').startsWith('syncCursor:').delete(),
     ]);
+    for (const id of createdQuarters.filter((q) => realGoalQuarters.has(q))) {
+      const seed: Quarter = { id, createdAt: new Date().toISOString(), updatedAt: SEED_UPDATED_AT, intents: { ...DEFAULT_INTENTS }, intentHistory: [], status: 'active' };
+      await db.quarters.put(seed);
+      // Clean, so it never pushes: the next sync re-reads everything and brings back the account's own
+      // copy, if there is one. The put marks it dirty (see the PITFALL in src/sync/engine.ts); an update
+      // that sets _dirty itself is left alone.
+      await db.table('quarters').update(id, { _dirty: 0 });
+    }
   });
 }
 

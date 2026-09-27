@@ -3,6 +3,7 @@
 // then the first quarter setup. Every change autosaves; leaving mid-way resumes on the same screen.
 import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import {
   BURNERS,
   BURNER_LABELS,
@@ -23,11 +24,16 @@ import { cleanTerms, termProblem } from '@/domain/coach/redact';
 import type { AppState } from '@/data/hooks';
 import { addPerson, getOnboarding, restorePreviousProfile, saveOnboarding, saveProfile, saveSettings } from '@/data/repo';
 import { db } from '@/data/db';
+import { isSyncConfigured } from '@/sync/client';
+import { syncNow } from '@/sync/manager';
+import type { SyncStatus } from '@/sync/types';
+import { useSyncStatus } from '@/sync/useSync';
 import { Flame } from '../components/Flame';
 import { CoachPanel } from '../components/CoachPanel';
 import { SensitiveWarning } from '../components/Sensitive';
 import { MiniFlame, MoltenButton, ShimmerText, StepEmbers } from '../components/sizzle';
-import { GhostButton, PrimaryButton, inputClass, useToast } from '../components/ui';
+import { SyncPanel } from '../components/SyncPanel';
+import { GhostButton, PrimaryButton, Sheet, inputClass, useToast } from '../components/ui';
 import { celebrate } from '../fx/Celebrations';
 import { sfx } from '../fx/audio';
 import { navigate } from '../router';
@@ -294,7 +300,7 @@ function Flow({ state, initial }: { state: AppState; initial: Initial }) {
           transition={{ duration: 0.3 }}
           className="flex-1"
         >
-          {stage === 'welcome' && <Welcome onBegin={() => go(1)} />}
+          {stage === 'welcome' && <Welcome onBegin={() => go(1)} state={state} />}
           {q && (
             <QuestionScreen
               q={q}
@@ -362,7 +368,7 @@ function Flow({ state, initial }: { state: AppState; initial: Initial }) {
   );
 }
 
-function Welcome({ onBegin }: { onBegin: () => void }) {
+function Welcome({ onBegin, state }: { onBegin: () => void; state: AppState }) {
   return (
     <div className="flex min-h-[80dvh] flex-col items-center justify-center text-center">
       <div className="relative -mb-4 grid h-[260px] w-full grid-cols-4">
@@ -379,10 +385,110 @@ function Welcome({ onBegin }: { onBegin: () => void }) {
       <MoltenButton className="mt-8 h-16 w-full max-w-sm text-[19px]" onClick={onBegin}>
         Begin
       </MoltenButton>
+      <SyncEntry state={state} />
       <button onClick={() => { void saveOnboarding({ dismissedAt: new Date().toISOString() }); navigate('', { replace: true }); }} className="mt-4 h-11 text-[15px] text-faint">
         Later
       </button>
     </div>
+  );
+}
+
+/** Onboarding or quarter setup is done on this device (locally, or pulled in from another device). */
+export function isSetupDone(state: Pick<AppState, 'onboarding' | 'needsSetup'>): boolean {
+  return !!state.onboarding?.completedAt || !state.needsSetup;
+}
+
+/** Nothing of this device's own yet: no profile, goals, or people, and nothing set up. */
+export function isFreshDevice(state: Pick<AppState, 'profile' | 'data' | 'onboarding' | 'needsSetup'>): boolean {
+  return !state.profile && state.data.allGoals.length === 0 && state.data.people.length === 0 && !isSetupDone(state);
+}
+
+/**
+ * What the Welcome sync sheet does once a sync that finished after it opened has landed. Only a device
+ * that was fresh when the sheet opened goes home (the account brought its setup over). Anyone with data
+ * of their own here opened the interview on purpose, so they stay on the sheet.
+ */
+export function afterWelcomeSync(freshAtOpen: boolean, setupDone: boolean): 'home' | 'nothingYet' | 'stay' {
+  if (!freshAtOpen) return 'stay';
+  return setupDone ? 'home' : 'nothingYet';
+}
+
+/** The Welcome sync entry's two lines: an invitation while signed out, the account once signed in. */
+export function syncEntryCopy(sync: Pick<SyncStatus, 'state' | 'email'>): { lead: string; action: string } {
+  if (sync.state === 'signedOut' || sync.state === 'unconfigured') return { lead: 'Already use Four Burners on another device?', action: 'Sign in to sync' };
+  return { lead: sync.email ? `Signed in as ${sync.email}` : 'Signed in to sync', action: 'Sync status' };
+}
+
+/**
+ * Welcome's second path, for a new device: sign in to sync. Once signed in and the first sync lands,
+ * if this device had nothing of its own when the sheet opened and the pulled data shows onboarding or
+ * quarter setup already done elsewhere, skip straight home (see afterWelcomeSync).
+ */
+function SyncEntry({ state }: { state: AppState }) {
+  const sync = useSyncStatus();
+  const [open, setOpen] = useState(false);
+  const [openedAt, setOpenedAt] = useState(0);
+  // Judged at the first open: data pulled in while the sheet is up must not turn this into an existing user.
+  const [freshAtOpen, setFreshAtOpen] = useState(false);
+  const [nothingYet, setNothingYet] = useState(false);
+  // Watch from the first open on, so closing the sheet mid-sync still lands on home.
+  const synced = openedAt > 0 && sync.state === 'idle' && !!sync.lastSyncedAt && Date.parse(sync.lastSyncedAt) >= openedAt;
+  const outcome = synced ? afterWelcomeSync(freshAtOpen, isSetupDone(state)) : null;
+
+  useEffect(() => {
+    if (outcome !== 'home' && outcome !== 'nothingYet') {
+      setNothingYet(false);
+      return;
+    }
+    if (outcome === 'home') {
+      setOpen(false);
+      celebrate({ kind: 'milestone', burner: 'family', title: 'Welcome back', subtitle: 'This device is in sync' });
+      navigate('', { replace: true });
+      return;
+    }
+    // Give the pulled records a moment to reach the screen before saying nothing came over.
+    const id = setTimeout(() => setNothingYet(true), 1200);
+    return () => clearTimeout(id);
+  }, [outcome]);
+
+  if (!isSyncConfigured()) return null;
+
+  const copy = syncEntryCopy(sync);
+  const openSheet = () => {
+    sfx.whoosh();
+    if (openedAt === 0) setFreshAtOpen(isFreshDevice(state));
+    setOpenedAt(Date.now());
+    setOpen(true);
+    // Already signed in on this device: pull now rather than at the next minute.
+    if (sync.state !== 'signedOut') void syncNow();
+  };
+
+  return (
+    <>
+      <motion.button
+        whileTap={{ scale: 0.97 }}
+        onClick={openSheet}
+        className="mt-5 w-full max-w-sm rounded-3xl bg-white/[0.03] px-5 py-3 text-center"
+        style={{ boxShadow: 'inset 0 0 0 1px rgba(255,180,90,0.32), 0 0 28px -12px rgba(255,140,50,0.7)' }}
+      >
+        <span className="block text-[14px] wrap-break-word text-dim">{copy.lead}</span>
+        <span className="mt-0.5 block text-[16px] font-bold text-ember">{copy.action}</span>
+      </motion.button>
+      {createPortal(
+        <Sheet open={open} onClose={() => setOpen(false)} title="Sync across devices">
+          <SyncPanel />
+          {nothingYet && (
+            <div className="mt-4 rounded-2xl border border-white/[0.08] bg-white/[0.03] px-4 py-3">
+              <p className="text-[14px] text-dim">You're signed in. Nothing is set up on your other devices yet, so start here.</p>
+              <button onClick={() => setOpen(false)} className="mt-1 min-h-10 text-[15px] font-semibold text-ember">
+                Continue
+              </button>
+            </div>
+          )}
+        </Sheet>,
+        document.body,
+      )}
+    </>
   );
 }
 

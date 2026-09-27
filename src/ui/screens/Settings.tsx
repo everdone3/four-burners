@@ -5,14 +5,80 @@ import { saveSettings, wipeAll } from '@/data/repo';
 import { hasSampleData, loadSampleData, wipeSampleData } from '@/data/sample';
 import { GhostButton, useToast } from '../components/ui';
 import { SensitiveTermsEditor } from '../components/Sensitive';
+import { SyncPanel } from '../components/SyncPanel';
+import { BackupPanel } from '../components/BackupPanel';
+import { AppVersionRow } from '../components/AppVersionRow';
+import { eraseDeviceSync, getSyncStatus, subscribeSyncStatus, syncNow } from '@/sync/manager';
+import type { SyncStatus } from '@/sync/types';
 import { goBack, navigate } from '../router';
 import { clockOffsetMs, setClockOffset, travelTo } from '@/data/clock';
 import { addDays, quarterSpan, weekday } from '@/domain';
+
+/** Longest wait for the last push before erasing (a paused or unreachable server can hang much longer). */
+export const ERASE_SYNC_WAIT_MS = 4_000;
+/** After a push attempt ends, a moment for the pending count to catch up with the records it cleared. */
+const SETTLE_MS = 400;
+
+/** Changes made on this device that the account does not have yet (0 when not signed in). */
+export function unsyncedCount(s: SyncStatus): number {
+  return s.state === 'signedOut' || s.state === 'unconfigured' ? 0 : s.pending;
+}
+
+type EraseSyncApi = { getSyncStatus: typeof getSyncStatus; subscribeSyncStatus: typeof subscribeSyncStatus; syncNow: typeof syncNow };
+
+/**
+ * Before erasing: one last try to push this device's unsynced changes. Resolves with how many are still
+ * unsynced, as soon as none are left, the try has ended (offline, failed), or after waitMs. A sign-out
+ * during the try (the session was dead) zeroes the status count, but those changes never reached the
+ * account, so the last count seen while signed in stands.
+ */
+export async function pushBeforeErase(api: EraseSyncApi = { getSyncStatus, subscribeSyncStatus, syncNow }, waitMs = ERASE_SYNC_WAIT_MS): Promise<number> {
+  const signedIn = (s: SyncStatus) => s.state !== 'signedOut' && s.state !== 'unconfigured';
+  let left = unsyncedCount(api.getSyncStatus());
+  if (left === 0) return 0;
+  await new Promise<void>((resolve) => {
+    let finished = false;
+    let settle: ReturnType<typeof setTimeout> | undefined;
+    const done = () => {
+      if (finished) return;
+      finished = true;
+      clearTimeout(timer);
+      clearTimeout(settle);
+      unsubscribe();
+      resolve();
+    };
+    const timer = setTimeout(done, waitMs);
+    const unsubscribe = api.subscribeSyncStatus(() => {
+      const s = api.getSyncStatus();
+      if (!signedIn(s)) return done();
+      left = s.pending;
+      if (left === 0) done();
+    });
+    void api
+      .syncNow()
+      .catch(() => undefined)
+      .then(() => {
+        if (!finished) settle = setTimeout(done, SETTLE_MS);
+      });
+  });
+  const s = api.getSyncStatus();
+  return signedIn(s) ? s.pending : left;
+}
+
+/** The erase confirmation. Unsynced changes exist only on this device, so it says plainly they will be lost. */
+export function eraseConfirmText(unsynced: number): string {
+  if (unsynced > 0) {
+    const what = unsynced === 1 ? '1 change on this device has' : `${unsynced} changes on this device have`;
+    return `${what} not synced yet and will be lost. Erase everything on this device anyway? This cannot be undone.`;
+  }
+  return 'Erase everything on this device? This cannot be undone. This device also signs out of sync, and your account keeps its copy.';
+}
 
 export function SettingsScreen({ state }: { state: AppState }) {
   const toast = useToast();
   const sample = useLiveQuery(hasSampleData, []);
   const [busy, setBusy] = useState(false);
+  const [syncingFirst, setSyncingFirst] = useState(false);
   const run = async (fn: () => Promise<void>, msg: string) => {
     setBusy(true);
     try {
@@ -59,6 +125,14 @@ export function SettingsScreen({ state }: { state: AppState }) {
         </div>
       </Section>
 
+      <Section title="Sync across devices">
+        <SyncPanel />
+      </Section>
+
+      <Section title="Backup">
+        <BackupPanel />
+      </Section>
+
       <Section title="Work confidentiality">
         <SensitiveTermsEditor terms={state.settings.sensitiveTerms} />
       </Section>
@@ -100,6 +174,10 @@ export function SettingsScreen({ state }: { state: AppState }) {
         <p className="pt-2 text-[13px] text-faint">Turn on Reduce Motion in iOS Settings for a calmer, still version of the app.</p>
       </Section>
 
+      <Section title="App">
+        <AppVersionRow />
+      </Section>
+
       <Section title="Developer">
         <p className="mb-3 text-[14px] text-dim">
           Sample data fills in last quarter and this quarter so far: goals, logs, people, energy, and a travel week.
@@ -117,11 +195,24 @@ export function SettingsScreen({ state }: { state: AppState }) {
           <GhostButton
             disabled={busy}
             className="text-rose-300"
-            onClick={() => {
-              if (confirm('Erase everything on this device? This cannot be undone.')) void run(wipeAll, 'All data erased');
+            onClick={async () => {
+              setBusy(true);
+              setSyncingFirst(unsyncedCount(getSyncStatus()) > 0);
+              let left: number;
+              try {
+                left = await pushBeforeErase();
+              } finally {
+                setSyncingFirst(false);
+                setBusy(false);
+              }
+              if (confirm(eraseConfirmText(left)))
+                void run(async () => {
+                  await eraseDeviceSync();
+                  await wipeAll();
+                }, 'All data erased');
             }}
           >
-            Erase all data on this device
+            {syncingFirst ? 'Syncing first...' : 'Erase all data on this device'}
           </GhostButton>
         </div>
 

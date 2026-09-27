@@ -1,5 +1,6 @@
 // The app's notion of "now". Normally the real time; the dev menu can shift it
 // ("time travel") to preview the weekly review or a quarter close before they happen.
+// Sync stamps (updatedAt) never use this clock; see stamp.ts.
 const KEY = 'fb-dev-clock-offset-ms';
 
 let offsetMs = (() => {

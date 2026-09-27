@@ -28,16 +28,21 @@ import { BurnerScreen } from './screens/Burner';
 import { Home } from './screens/Home';
 import { LogSheet } from './screens/LogSheet';
 import { SettingsScreen } from './screens/Settings';
+import { UpdatePill } from './components/UpdatePill';
+import { isUpdateSafePoint, useAppUpdate } from './useAppUpdate';
 
 // The Log button makes its entrance once per launch, with the ignition sequence.
 let logIntro = true;
 
 export function App() {
+  // New versions apply silently at a safe moment, otherwise the pill offers a reload.
+  useAppUpdate(isUpdateSafePoint);
   return (
     <ToastProvider>
       <NotePromptProvider>
         <Shell />
       </NotePromptProvider>
+      <UpdatePill />
     </ToastProvider>
   );
 }
