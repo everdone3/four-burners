@@ -10,7 +10,7 @@ export default defineConfig({
     react(),
     tailwindcss(),
     // Offline app shell. src/sw.ts precaches the build; the app registers it itself (src/ui/useAppUpdate.ts).
-    // The worker ships as /sw.js with scope '/'. Keep both forever: push subscriptions (Phase 7) bind to them.
+    // The worker ships as /sw.js with scope '/'. Keep both forever: push subscriptions bind to them.
     VitePWA({
       strategies: 'injectManifest',
       srcDir: 'src',

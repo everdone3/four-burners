@@ -5,6 +5,7 @@ import { AnimatePresence, motion } from 'motion/react';
 import { useEffect, useRef, useState } from 'react';
 import { SIGN_IN_MESSAGES, SignInError, isValidEmail, normalizeCode, parseSignInLink } from '@/sync/auth';
 import { sendCode, signOut, startSync, syncNow, verifyCode } from '@/sync/manager';
+import { turnOffPush } from '@/notify/push';
 import type { SyncStatus } from '@/sync/types';
 import { describeSyncStatus, pendingNote, useSyncStatus } from '@/sync/useSync';
 import { sfx } from '../fx/audio';
@@ -464,9 +465,14 @@ function Status({ status }: { status: SyncStatus }) {
           className="px-5 text-rose-300"
           disabled={signingOut}
           onClick={() => {
-            if (!confirm('Sign out on this device? Your data stays here.')) return;
+            if (!confirm('Sign out on this device? Your data stays here. Notifications stop on this device.')) return;
             setSigningOut(true);
-            void signOut().finally(() => setSigningOut(false));
+            // While the session still exists: the server forgets this device, so it stops getting this
+            // account's reminders (nudges can show names on the lock screen).
+            void turnOffPush()
+              .catch(() => undefined)
+              .then(() => signOut())
+              .finally(() => setSigningOut(false));
           }}
         >
           {signingOut ? 'Signing out...' : 'Sign out'}

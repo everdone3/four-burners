@@ -12,7 +12,7 @@ A private, offline-first goal tracker built on the Four Burners theory. Installa
 - [x] Phase 4: Coach and onboarding (interview + About me, 4 packet types, redaction, copy and paste loop, saved replies)
 - [x] Phase 5: Sync (email-code sign-in, offline-first sync, JSON backups, offline app shell)
 - [x] Phase 6: Security (Face ID lock with a passkey, idle re-lock, blur when leaving the app)
-- [ ] Phase 7: Notifications
+- [x] Phase 7: Notifications (daily and weekly reminders, smart nudges, quiet hours, Web Push from a Supabase schedule)
 - [ ] Phase 8: Shortcuts
 - [ ] Phase 9: Calendar-aware crunch mode
 - [ ] Phase 10: Polish
@@ -26,6 +26,7 @@ npm install
 npm run dev      # http://localhost:5180
 npm test         # domain + data unit tests
 npm run build    # typecheck + production build
+npm run build:functions  # rebundle supabase/functions/notify after changing src/server or src/domain
 ```
 
 To see everything working right away: Settings (gear icon) > Developer > Load sample data. Wipe it from the same place.
@@ -38,7 +39,10 @@ src/domain/   Pure TypeScript rules: scoring, intents, High cap, goals, proratio
               Mirror this module for a future native SwiftUI version.
 src/data/     Dexie (IndexedDB) storage, repository writes, live queries, sample data, backups.
 src/sync/     Sync engine (last write wins), Supabase client, email-code auth, sync scheduler.
-src/sw.ts     Service worker: the app shell works offline.
+src/notify/   This device's push subscription (turn on/off, time zone refresh, test) and push payloads.
+src/server/   Server code: the notify Edge Function (Web Push, VAPID), bundled with src/domain into
+              supabase/functions/notify by `npm run build:functions`.
+src/sw.ts     Service worker: the app shell works offline, and it shows notifications.
 src/ui/       React screens and components. Flames live in ui/components/Flame.tsx.
 supabase/migrations/  Versioned SQL for the Supabase database (one new file per change).
 ```
@@ -84,8 +88,9 @@ way. Never edit a migration that has already been run.
 
 ### If Supabase paused the project
 
-Free Supabase projects pause after about a week with no activity (Phase 7's scheduled jobs will keep it
-awake). The app keeps working offline while paused, and the status in Settings says the sync server can't
+Free Supabase projects pause after about a week with no activity. Once notifications are set up, the
+schedule calls the notify function through the project's API every 5 minutes, which counts as activity and
+keeps it awake. The app keeps working offline while paused, and the status in Settings says the sync server can't
 be reached. Your data is safe on every device and in the paused project. To restore:
 
 1. Sign in at supabase.com/dashboard and open the project. It shows as paused.
@@ -94,6 +99,73 @@ be reached. Your data is safe on every device and in the paused project. To rest
 
 Supabase keeps a paused free project restorable for a long time (currently up to a year); past that, download
 its backup from the dashboard and restore it into a new project, then update `.env.production`.
+
+## Notifications
+
+Daily check-in and weekly review reminders at times you choose, and smart nudges when a burner slips against
+its intent or a key person is overdue. iOS web apps can't schedule notifications themselves, so a Supabase
+schedule (pg_cron, every 5 minutes) runs the `notify` Edge Function, which sends Web Push to every device that
+turned notifications on. The rules live in `src/domain/notify.ts`:
+
+- **Daily check-in** at your time. Skipped on days you already checked in, and during Travel/Crunch.
+- **Weekly review** at your time on your review day. Skipped once that review is done.
+- **Smart nudges**, at most one a day, sent between 11:00 and 19:00. A burner nudges when its pace (already
+  adjusted for its intent) is well behind and it has been quiet for a few days; High burners first, then
+  overdue people, then Steady burners. Low burners barely ever nudge. Each subject rests a few days before it
+  can nudge again. Never during Travel/Crunch. Thresholds are in `src/domain/config.ts`.
+- **Quiet hours**: nothing arrives in them. A reminder that falls inside waits until they end if that is
+  within 3 hours, otherwise it is skipped that day.
+- **Time zones**: times are wall-clock times wherever you are. The server uses the time zone of the device you
+  opened most recently (each open refreshes it), and "today" follows your day boundary.
+- **Lock screen**: nudges can show a goal or a person's name. Work names on your confidentiality list are
+  always replaced with [redacted], and private notes never appear. To hide previews entirely: iOS Settings >
+  Notifications > Four Burners > Show Previews.
+
+The schedule (Settings > Notifications) syncs and is shared by all devices. Each device turns notifications on
+for itself: Settings > Notifications > **Turn on notifications** > Allow, then **Send a test notification**.
+Requires being signed in to sync, and on iPhone and iPad the app installed to the Home Screen and opened from
+there (iOS 16.4 or later).
+
+### One-time setup
+
+The VAPID key pair that signs notifications is already made (`npm run vapid`): the public key is built into the
+app from `.env.production`, and the private key is in `supabase/functions/.env`, which is git-ignored. Keep that
+file; making new keys means every device has to turn notifications on again.
+
+1. **Tables.** SQL Editor > New query > paste `supabase/migrations/20261002120000_push.sql` > Run.
+2. **The function.** Edge Functions > Deploy a new function > Via Editor. Name it exactly `notify`, replace the
+   sample code with the whole of `supabase/functions/notify/index.ts` (one self-contained file), and Deploy.
+   Then in the function's settings turn **off** JWT verification ("Verify JWT" or "Enforce JWT verification"; the schedule calls it without
+   a user token; the function checks its own secret) and save.
+3. **Secrets.** Edge Functions > Secrets > add the three lines from `supabase/functions/.env`:
+   `VAPID_PUBLIC_KEY`, `VAPID_PRIVATE_KEY`, `VAPID_SUBJECT`. The project URL and service key are provided
+   to the function automatically.
+4. **Schedule.** SQL Editor > New query > paste `supabase/migrations/20261002120100_notify_schedule.sql` > Run.
+   It turns on pg_cron and pg_net, stores the function URL and a random secret in Vault, and schedules the run
+   every 5 minutes.
+5. **Your devices.** Open the Home Screen app > Settings > Notifications > Turn on notifications.
+
+With the Supabase CLI instead of steps 2 and 3: `npx supabase login`, `npx supabase link --project-ref
+zkgdagxnrkqshulwnmya`, `npx supabase functions deploy notify` (`supabase/config.toml` turns JWT verification
+off), `npx supabase secrets set --env-file supabase/functions/.env`.
+
+After changing `src/server` or `src/domain`, run `npm run build:functions` and deploy the function again (a
+test fails while the bundle is out of date).
+
+### If notifications don't arrive
+
+- **Send a test notification** in Settings says what went wrong (function not deployed, missing secrets, key
+  rejected).
+- Is the schedule running? SQL Editor: `select status, return_message, start_time from cron.job_run_details
+  order by start_time desc limit 5;` and the function's answers: `select status_code, content from
+  net._http_response order by created desc limit 5;` (`401` means the schedule secret did not match; run the
+  schedule migration again).
+- Edge Functions > notify > Logs shows errors from each run.
+- iPhone: Settings > Notifications > Four Burners must allow notifications, and Focus modes can hold them.
+- If iOS drops a device's subscription, the app renews it on the next open, or Settings asks you to turn it on
+  again.
+- Pause all notifications: `select cron.unschedule('four-burners-notify');` (run the schedule migration again
+  to resume).
 
 ## Backups
 

@@ -172,6 +172,36 @@ export function GhostButton({ children, className = '', ...rest }: React.ButtonH
   );
 }
 
+/** A settings row: label and hint on the left, a control on the right. */
+export function Row({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex items-center justify-between gap-4 py-2">
+      <div>
+        <div className="text-[16px]">{label}</div>
+        {hint && <div className="text-[13px] text-faint">{hint}</div>}
+      </div>
+      {children}
+    </div>
+  );
+}
+
+export function Toggle({ checked, onChange, label, disabled }: { checked: boolean; onChange: (v: boolean) => void; label: string; disabled?: boolean }) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-label={label}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+      className="relative h-8 w-13 shrink-0 rounded-full transition disabled:opacity-40"
+      style={{ background: checked ? 'linear-gradient(90deg, #ffb454, #ff6a2b)' : 'rgba(255,255,255,0.15)', boxShadow: checked ? '0 0 16px -2px #ff8a3d' : undefined }}
+    >
+      <span className="absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all" style={{ left: checked ? 24 : 4 }} />
+    </button>
+  );
+}
+
 export function Field({ label, hint, children }: { label: string; hint?: string; children: ReactNode }) {
   return (
     <label className="block">

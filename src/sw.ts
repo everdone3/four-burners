@@ -1,10 +1,11 @@
 // Service worker: the offline app shell. Precaches the built app so it opens on an airplane.
 // Data never passes through here; Dexie (IndexedDB) is the offline store, and Supabase calls go straight
 // to the network, so there is no runtime caching of *.supabase.co on purpose.
-// Served as /sw.js with scope '/'. Never rename or move it: push subscriptions (Phase 7) are tied to it.
+// Served as /sw.js with scope '/'. Never rename or move it: push subscriptions are tied to it.
 import { cleanupOutdatedCaches, createHandlerBoundToURL, precacheAndRoute } from 'workbox-precaching';
 import { NavigationRoute, registerRoute } from 'workbox-routing';
 import { clientsClaim } from 'workbox-core';
+import { readPush, safeHash } from './notify/payload';
 
 declare let self: ServiceWorkerGlobalScope;
 
@@ -25,18 +26,44 @@ registerRoute(
   }),
 );
 
-// Phase 7 (notifications) goes here, in this same file:
-// self.addEventListener('push', (event) => {
-//   const data = (event.data?.json() ?? {}) as { title?: string; body?: string; url?: string };
-//   event.waitUntil(self.registration.showNotification(data.title ?? 'Four Burners', { body: data.body, icon: '/icon.svg', data }));
-// });
-// self.addEventListener('notificationclick', (event) => {
-//   event.notification.close();
-//   const url = (event.notification.data as { url?: string } | undefined)?.url ?? '/#/';
-//   event.waitUntil(
-//     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((all) => {
-//       const open = all.find((c) => new URL(c.url).origin === self.location.origin);
-//       return open ? open.focus().then((c) => c.navigate(url)) : self.clients.openWindow(url);
-//     }),
-//   );
-// });
+// Notifications (Phase 7). The notify Edge Function sends {title, body, url, tag} by Web Push.
+// iOS requires every push to show a notification (or it revokes the subscription), so one is always shown,
+// even for a payload that can't be read.
+self.addEventListener('push', (event) => {
+  let text: string | null = null;
+  try {
+    text = event.data?.text() ?? null;
+  } catch {
+    // unreadable payload: show the default
+  }
+  const n = readPush(text);
+  event.waitUntil(
+    self.registration.showNotification(n.title, {
+      body: n.body,
+      tag: n.tag,
+      icon: '/apple-touch-icon.png',
+      badge: '/apple-touch-icon.png',
+      data: { hash: n.hash },
+    }),
+  );
+});
+
+// A tap opens the screen the notification is about: in the open app if there is one (the app switches its
+// hash route, see startPush in src/notify/push.ts, so nothing reloads and nothing typed is lost), otherwise
+// in a fresh launch. Either way the app lock, if on, asks for Face ID first.
+self.addEventListener('notificationclick', (event) => {
+  event.notification.close();
+  const hash = safeHash((event.notification.data as { hash?: unknown } | null)?.hash);
+  event.waitUntil(
+    (async () => {
+      const all = await self.clients.matchAll({ type: 'window', includeUncontrolled: true });
+      const open = all.find((c) => new URL(c.url).origin === self.location.origin);
+      if (open) {
+        await open.focus().catch(() => undefined);
+        open.postMessage({ type: 'fb-open', hash });
+        return;
+      }
+      await self.clients.openWindow(`/${hash}`);
+    })(),
+  );
+});

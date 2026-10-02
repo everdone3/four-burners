@@ -3,7 +3,9 @@ import { useState } from 'react';
 import type { AppState } from '@/data/hooks';
 import { saveSettings, wipeAll } from '@/data/repo';
 import { hasSampleData, loadSampleData, wipeSampleData } from '@/data/sample';
-import { GhostButton, useToast } from '../components/ui';
+import { GhostButton, Row, Toggle, useToast } from '../components/ui';
+import { NotificationSettings } from '../components/NotificationSettings';
+import { turnOffPush } from '@/notify/push';
 import { SensitiveTermsEditor } from '../components/Sensitive';
 import { SyncPanel } from '../components/SyncPanel';
 import { LockSettings } from '../components/LockSettings';
@@ -127,6 +129,10 @@ export function SettingsScreen({ state }: { state: AppState }) {
         </div>
       </Section>
 
+      <Section title="Notifications">
+        <NotificationSettings settings={state.settings} />
+      </Section>
+
       <Section title="Sync across devices">
         <SyncPanel />
       </Section>
@@ -219,6 +225,8 @@ export function SettingsScreen({ state }: { state: AppState }) {
               // remove it, because there the lock is what stands between you and a fresh start.
               if (confirm(eraseConfirmText(left)))
                 void run(async () => {
+                  // Stop this device's notifications while still signed in (the server forgets it).
+                  await turnOffPush().catch(() => undefined);
                   await eraseDeviceSync();
                   await wipeAll();
                 }, 'All data erased');
@@ -257,33 +265,6 @@ function Section({ title, children }: { title: string; children: React.ReactNode
       <h2 className="mb-3 text-[13px] font-medium tracking-wide text-dim uppercase">{title}</h2>
       <div className="rounded-3xl border border-line bg-surface p-4">{children}</div>
     </section>
-  );
-}
-
-function Row({ label, hint, children }: { label: string; hint?: string; children: React.ReactNode }) {
-  return (
-    <div className="flex items-center justify-between gap-4 py-2">
-      <div>
-        <div className="text-[16px]">{label}</div>
-        {hint && <div className="text-[13px] text-faint">{hint}</div>}
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function Toggle({ checked, onChange, label }: { checked: boolean; onChange: (v: boolean) => void; label: string }) {
-  return (
-    <button
-      role="switch"
-      aria-checked={checked}
-      aria-label={label}
-      onClick={() => onChange(!checked)}
-      className="relative h-8 w-13 shrink-0 rounded-full transition"
-      style={{ background: checked ? 'linear-gradient(90deg, #ffb454, #ff6a2b)' : 'rgba(255,255,255,0.15)', boxShadow: checked ? '0 0 16px -2px #ff8a3d' : undefined }}
-    >
-      <span className="absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all" style={{ left: checked ? 24 : 4 }} />
-    </button>
   );
 }
 

@@ -58,3 +58,39 @@ export const CRUNCH_EXPECTATION = 0.25;
 
 /** Rolling window for the Consistency score. */
 export const CONSISTENCY_WINDOW_DAYS = 28;
+
+// ---------- Notifications (src/domain/notify.ts) ----------
+
+/** Smart nudges go out at most once a day, somewhere in this local time window (24h clock). */
+export const NUDGE_WINDOW = { start: '11:00', end: '19:00' } as const;
+
+/** A burner only nudges when its pace (already intent-adjusted) is below this. Low barely ever does. */
+export const NUDGE_PACE: Record<Intent, number> = {
+  high: 0.75,
+  steady: 0.6,
+  low: 0.35,
+};
+
+/** ...and it has also been quiet (no activity) for at least this many days. */
+export const NUDGE_QUIET_DAYS: Record<Intent, number> = {
+  high: 2,
+  steady: 4,
+  low: 14,
+};
+
+/** Days before the same burner can nudge again. */
+export const NUDGE_COOLDOWN_DAYS: Record<Intent, number> = {
+  high: 3,
+  steady: 5,
+  low: 14,
+};
+
+/** A person nudges once days since contact reach this multiple of their cadence (by their burner's intent). */
+export const PERSON_NUDGE_RATIO: Record<Intent, number> = {
+  high: 1.35,
+  steady: 1.35,
+  low: 2,
+};
+
+/** A reminder that could not go out on time (quiet hours, server asleep) is dropped after this many minutes. */
+export const REMINDER_LATE_LIMIT_MIN = 180;

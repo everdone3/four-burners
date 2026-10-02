@@ -1,0 +1,5 @@
+# Used only by the Supabase CLI (`npx supabase functions deploy notify`). The dashboard has the same switch:
+# Edge Functions > notify > settings > JWT verification ("Verify JWT" or "Enforce JWT verification") off.
+[functions.notify]
+# The pg_cron schedule calls without a user token; the function checks its own secret (see handler.ts).
+verify_jwt = false

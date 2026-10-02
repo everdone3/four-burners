@@ -9,6 +9,7 @@ import { reloadApp } from './ui/useAppUpdate';
 import { db } from './data/db';
 import { startLock } from './lock/controller';
 import { startSync } from './sync/manager';
+import { startPush } from './notify/push';
 import './index.css';
 
 // The Face ID lock decides, before anything renders, whether this launch starts locked (index.html has
@@ -35,6 +36,10 @@ restoreFlowOnLaunch();
 // Sync across devices (does nothing until Supabase is configured and you sign in in Settings).
 // It keeps running while the app is locked.
 void startSync();
+
+// Notifications: keep this device's push subscription (and current time zone) fresh on the server, and open
+// the screen a tapped notification points to. Does nothing until notifications are turned on in Settings.
+startPush();
 
 // Ask the browser not to clear local data when the device is low on space. Settings can read the answer.
 void requestPersistentStorage();

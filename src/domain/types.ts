@@ -240,7 +240,33 @@ export interface Settings {
   reviewDay: number;
   /** Company or client names that are always redacted from coach packets. */
   sensitiveTerms: string[];
+  /** Push notification schedule. Shared by every device; each device opts in to receiving them. */
+  notify: NotifyPrefs;
 }
+
+/** A reminder at a wall-clock time, 'HH:MM' (24h), in whatever time zone you are in. */
+export interface ReminderPref {
+  on: boolean;
+  time: string;
+}
+
+export interface NotifyPrefs {
+  /** Daily check-in reminder. Skipped on days you have already checked in, and during Travel/Crunch. */
+  daily: ReminderPref;
+  /** Weekly review reminder, on the weekly review day (Settings.reviewDay). */
+  weekly: ReminderPref;
+  /** Smart nudges: a burner slipping against its intent, or a key person overdue. At most one a day. */
+  nudges: boolean;
+  /** Nothing is sent between start and end (wraps past midnight), in your current local time. */
+  quiet: { on: boolean; start: string; end: string };
+}
+
+export const DEFAULT_NOTIFY_PREFS: NotifyPrefs = {
+  daily: { on: true, time: '20:00' },
+  weekly: { on: true, time: '17:00' },
+  nudges: true,
+  quiet: { on: true, start: '22:00', end: '07:00' },
+};
 
 export const DEFAULT_SETTINGS: Settings = {
   dayBoundaryHour: 3,
@@ -249,4 +275,5 @@ export const DEFAULT_SETTINGS: Settings = {
   haptics: true,
   reviewDay: 6,
   sensitiveTerms: [],
+  notify: DEFAULT_NOTIFY_PREFS,
 };
