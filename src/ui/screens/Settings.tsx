@@ -6,6 +6,7 @@ import { hasSampleData, loadSampleData, wipeSampleData } from '@/data/sample';
 import { GhostButton, Row, Toggle, useToast } from '../components/ui';
 import { NotificationSettings } from '../components/NotificationSettings';
 import { ShortcutsSettings } from '../components/ShortcutsSettings';
+import { CalendarSettings } from '../components/CalendarSettings';
 import { turnOffPush } from '@/notify/push';
 import { SensitiveTermsEditor } from '../components/Sensitive';
 import { SyncPanel } from '../components/SyncPanel';
@@ -136,6 +137,10 @@ export function SettingsScreen({ state }: { state: AppState }) {
 
       <Section title="Shortcuts and Siri">
         <ShortcutsSettings goals={state.data.goals} />
+      </Section>
+
+      <Section title="Calendar (optional)">
+        <CalendarSettings today={state.today} />
       </Section>
 
       <Section title="Sync across devices">

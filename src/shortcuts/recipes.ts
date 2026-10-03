@@ -12,14 +12,17 @@ export interface Recipe {
 
 /** The request every recipe uses. */
 export const REQUEST_STEPS = [
-  'Add "Get Contents of URL". Tap the URL and paste your Shortcuts address (above).',
+  'Add "Get Contents of URL". Tap the blue URL and paste your Shortcuts address (Copy, above).',
   'Tap the arrow (Show More). Method: POST.',
-  'Headers: Add new header. Key: Authorization. Value: Bearer, a space, then your token.',
-  'Request Body: JSON. Add the fields listed in the recipe (all as Text unless it says Number).',
+  'Headers: Add new header. The row has two boxes: the grey "Key" box on the LEFT gets Authorization; the unlabeled box on the RIGHT gets Bearer, a space, then your token (long-press > Paste).',
+  'Request Body: JSON. Add the fields listed in the recipe (all as Text unless it says Number): key on the left, value on the right.',
 ];
 
 /** The reply every recipe ends with: Siri reads it out. */
-export const REPLY_STEPS = ['Add "Get Dictionary Value": Get Value for key message in Contents of URL.', 'Add "Show Result" with that Dictionary Value. Siri reads it out.'];
+export const REPLY_STEPS = [
+  'Add "Get Dictionary Value": Get Value for key message in Contents of URL.',
+  'Add "Show Content" (called "Show Result" on older iOS) with that Dictionary Value. Siri reads it out. There is no Done button: Shortcuts saves as you go; run it with the play button.',
+];
 
 /** How to send "at": the phone's own time, so entries land on the day you are living wherever you are. */
 export const AT_FIELD = 'at = Current Date. Tap the Current Date token > Date Format: ISO 8601, with Include Time on.';

@@ -444,13 +444,17 @@ export async function toggleAction(id: string): Promise<boolean> {
 
 // ---------- Travel/Crunch mode ----------
 
-export async function startCrunch(opts: { end?: LocalDate; label?: string } = {}): Promise<void> {
+/**
+ * Turn on Travel/Crunch from today, or from an earlier `start` (a trip already under way: its missed days are
+ * paused too). A start after today is treated as today.
+ */
+export async function startCrunch(opts: { start?: LocalDate; end?: LocalDate; label?: string } = {}): Promise<void> {
   const s = await stamp();
   await endCrunch();
   const t = nextUpdatedAt();
   await db.crunch.put({
     id: newId(),
-    start: s.localDate,
+    start: opts.start && opts.start < s.localDate ? opts.start : s.localDate,
     ...(opts.end && opts.end >= s.localDate ? { end: opts.end } : {}),
     ...(opts.label ? { label: opts.label } : {}),
     createdAt: t,

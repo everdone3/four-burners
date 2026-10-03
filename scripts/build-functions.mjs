@@ -20,6 +20,11 @@ export const FUNCTIONS = {
     about: 'The Four Burners shortcuts Edge Function: Siri and Apple Shortcuts logging, and Apple Health data.',
     from: 'src/server/shortcuts',
   },
+  calendar: {
+    entry: 'src/server/calendar/entry.deno.ts',
+    about: 'The Four Burners calendar Edge Function: reads a calendar feed (ICS) for Travel/Crunch suggestions. Stores nothing.',
+    from: 'src/server/calendar',
+  },
 };
 
 /** Where a function's bundle is committed. */

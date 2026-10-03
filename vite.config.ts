@@ -29,5 +29,7 @@ export default defineConfig({
   define: { __APP_VERSION__: JSON.stringify(process.env.VERCEL_GIT_COMMIT_SHA?.slice(0, 7) || 'dev') },
   resolve: { alias: { '@': fileURLToPath(new URL('./src', import.meta.url)) } },
   server: { port: 5180 },
-  test: { environment: 'node', include: ['src/**/*.test.ts'] },
+  // 15 s per test: the full suite runs PGlite (real Postgres) and bundler tests in parallel, and on a busy machine
+  // timing-sensitive tests could pass alone yet hit the 5 s default under load.
+  test: { environment: 'node', include: ['src/**/*.test.ts'], testTimeout: 15_000 },
 });

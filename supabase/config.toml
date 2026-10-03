@@ -7,3 +7,7 @@ verify_jwt = false
 [functions.shortcuts]
 # Shortcuts send a personal token, not a sign-in; the function checks the token itself (see handler.ts).
 verify_jwt = false
+
+[functions.calendar]
+# The app calls it with your sign-in; the function checks that itself (see src/server/calendar/handler.ts).
+verify_jwt = false

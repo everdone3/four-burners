@@ -14,7 +14,7 @@ A private, offline-first goal tracker built on the Four Burners theory. Installa
 - [x] Phase 6: Security (Face ID lock with a passkey, idle re-lock, blur when leaving the app)
 - [x] Phase 7: Notifications (daily and weekly reminders, smart nudges, quiet hours, Web Push from a Supabase schedule)
 - [x] Phase 8: Shortcuts (Siri logging, touchpoints, Apple Health sync, personal tokens)
-- [ ] Phase 9: Calendar-aware crunch mode
+- [x] Phase 9: Calendar-aware crunch mode (optional calendar link, travel suggestions, never automatic)
 - [ ] Phase 10: Polish
 
 ## Develop
@@ -41,7 +41,8 @@ src/data/     Dexie (IndexedDB) storage, repository writes, live queries, sample
 src/sync/     Sync engine (last write wins), Supabase client, email-code auth, sync scheduler.
 src/notify/   This device's push subscription (turn on/off, time zone refresh, test) and push payloads.
 src/shortcuts/ Personal tokens (made on the device, only the hash is stored), recipes for the Shortcuts.
-src/server/   Server code: the notify (Web Push) and shortcuts (Siri, Health) Edge Functions, each bundled
+src/calendar/ The optional calendar link on this device and its Travel/Crunch suggestions.
+src/server/   Server code: the notify (Web Push), shortcuts (Siri, Health) and calendar Edge Functions, each bundled
               with src/domain into supabase/functions/<name> by `npm run build:functions`.
 src/sw.ts     Service worker: the app shell works offline, and it shows notifications.
 src/ui/       React screens and components. Flames live in ui/components/Flame.tsx.
@@ -192,7 +193,9 @@ Health". Each Shortcut sends the phone's own time, so an entry lands on the day 
 - Milestone goals can't be logged by voice (check off the next step in the app).
 
 The request every Shortcut makes: **Get Contents of URL**, Method POST, header `Authorization: Bearer <token>`,
-Request Body JSON:
+Request Body JSON. On current iOS each header and body row has the key box on the left (grey "Key") and an
+unlabeled value box on the right. End with "Get Dictionary Value" (key `message`) and "Show Content" (older iOS:
+"Show Result"). There is no Done button; Shortcuts saves as you go.
 
 | action | fields | does |
 | --- | --- | --- |
@@ -215,6 +218,45 @@ says) and `ok`.
    Shortcut (fields: action = ping) to check the address and token.
 
 With the CLI: `npx supabase functions deploy shortcuts` (`supabase/config.toml` turns JWT verification off).
+
+## Calendar (optional)
+
+Link a read-only calendar and the app suggests Travel/Crunch mode when your calendar shows you away. It always
+asks first ("Your calendar shows "Denver trip" (Oct 5 to Oct 8). Turn on Travel/Crunch through Oct 8?") and never
+turns it on by itself. The app works exactly the same with no calendar linked, which matters if your employer
+blocks calendar sharing.
+
+- **What counts as away**: flights at any length ("Flight to Boston", "ORD → DEN"); travel words (trip, travel,
+  vacation, PTO, OOO, out of office, on leave, offsite, conference, hotel...) on all-day, multi-day or 4+ hour
+  events; and any all-day event of two or more days marked busy. Ordinary work items never count, whatever
+  words they use ("Conference call", "Offsite planning", "Travel expense report", "Book flight"), and neither
+  do birthdays, reminders, recurring events or events marked free. Outlook's midnight-to-midnight all-day events
+  are read as all-day. Overlapping and back-to-back days merge into one trip.
+- **When it asks**: on Home, on any day a trip covers, if Travel/Crunch is off. Not for a trip you said "Not this
+  time" to (even if its dates shift a little), nor one you already turned Travel/Crunch on and off for. "Turn it on" starts Travel/Crunch on the trip's first day (up to a week back, so missed days
+  are paused too) and ends it on the last.
+- **Privacy**: the link is a secret (anyone with it can read the calendar). It stays on the device where you
+  pasted it: not synced, not in backups. Browsers can't read most calendar feeds directly, so each check (at
+  most every 6 hours, or Check now) sends it to your own `calendar` Edge Function, which fetches the feed, sends
+  back only the next two months of events, and stores and logs nothing. It only fetches https addresses on
+  public host names that resolve to public addresses (re-checked on every redirect). A failed check retries
+  after 30 minutes.
+
+Getting the link (Settings > Calendar > Where to find the link has the same steps):
+- **Google Calendar**: calendar.google.com > Settings > the calendar > Integrate calendar > Secret address in iCal format.
+- **iCloud**: Calendar app > Calendars > (i) > Public Calendar > Share Link. This makes that calendar readable by
+  anyone with the link, so prefer a calendar that only holds trips.
+- **Outlook / Microsoft 365**: Outlook on the web > Settings > Calendar > Shared calendars > Publish a calendar > ICS.
+- **TripIt**: Settings > Calendar Feeds.
+
+### One-time setup
+
+1. **The function.** Edge Functions > Deploy a new function > Via Editor. Name it exactly `calendar`, replace
+   the sample code with the whole of `supabase/functions/calendar/index.ts`, Deploy, then turn **off** JWT
+   verification in its settings (it checks your sign-in itself). No secrets, no SQL.
+2. **Your iPhone.** Settings > Calendar (optional) > paste the link > Link. It shows the trips it found.
+
+With the CLI: `npx supabase functions deploy calendar`.
 
 ## Backups
 

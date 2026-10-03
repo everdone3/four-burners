@@ -12,6 +12,7 @@ import { STATUS_COLOR, STATUS_LABEL } from '../labels';
 import { sfx } from '../fx/audio';
 import { haptic } from '../fx/haptics';
 import { BackupReminderCard } from '../components/BackupReminderCard';
+import { CalendarSuggestionCard } from '../components/CalendarSuggestion';
 import { useReducedMotion } from '../motion';
 
 // The ignition sequence plays once per app launch, not every time you return home.
@@ -85,6 +86,7 @@ export function Home({ state }: { state: AppState }) {
         <CrunchChip crunch={state.crunchNow} onOpen={() => setCrunchOpen(true)} />
       </div>
       {state.crunchNow && <CrunchBanner crunch={state.crunchNow} onOpen={() => setCrunchOpen(true)} />}
+      <CalendarSuggestionCard today={today} crunch={state.data.crunch} />
 
       <ReviewCard today={today} reviewDay={state.settings.reviewDay} reviews={state.data.reviews} />
       <CoachCard hasProfile={!!state.profile} resumable={!!state.onboarding && !state.onboarding.completedAt && state.onboarding.step > 0 && !state.onboarding.resumeHidden} />
