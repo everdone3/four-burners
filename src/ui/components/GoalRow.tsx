@@ -128,7 +128,7 @@ export function GoalRow({
         <button
           onClick={onOpen ? () => { sfx.tick(); onOpen(); } : onTap}
           className="min-w-0 flex-1 py-4 pr-2 pl-4 text-left active:bg-white/[0.04]"
-          aria-label={onOpen ? `${goal.title} details` : `Log ${goal.title}`}
+          aria-label={onOpen ? `${goal.title} details` : finished ? `${goal.title}, done` : `Log ${goal.title}`}
         >
           <div className="truncate text-[17px] font-semibold">{goal.title}</div>
           <div className="mt-0.5 flex gap-2 text-[13px]">
@@ -149,6 +149,10 @@ export function GoalRow({
           onClick={onTap}
           disabled={finished}
           aria-label={finished ? `${goal.title} done` : `Log ${goal.title}`}
+          // Where the whole row already logs (no details view), this is a second target for the same tap:
+          // keep it for fingers, hide it from VoiceOver and the keyboard so each goal is announced once.
+          aria-hidden={onOpen ? undefined : true}
+          tabIndex={onOpen ? undefined : -1}
           whileTap={{ scale: 0.85 }}
           className="mr-4 grid h-12 w-12 shrink-0 place-items-center rounded-full text-[22px] font-light"
           style={{

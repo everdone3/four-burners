@@ -1,19 +1,11 @@
 import { AnimatePresence, motion } from 'motion/react';
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import { BURNERS, type BurnerId } from '@/domain';
 import { useAppState } from '@/data/hooks';
 import { ToastProvider, useToast } from './components/ui';
 import { Celebrations, celebrate } from './fx/Celebrations';
 import { checkTimeZoneChange, streakMilestoneReached } from '@/data/repo';
-import { ReviewScreen } from './screens/Review';
-import { ReelScreen } from './screens/Reel';
-import { CloseScreen } from './screens/Close';
-import { SetupScreen } from './screens/Setup';
-import { ArchiveScreen } from './screens/Archive';
-import { CheckInScreen } from './screens/CheckIn';
-import { OnboardingScreen } from './screens/Onboarding';
-import { AboutScreen } from './screens/About';
-import { CoachHistoryScreen } from './screens/CoachHistory';
+import { lazyScreen, preloadScreens } from './lazyScreen';
 import { PendingCoachBanner } from "./components/CoachPanel";
 import { navigate } from './router';
 import { getOnboarding } from '@/data/repo';
@@ -27,9 +19,21 @@ import { routeKey, useRoute } from './router';
 import { BurnerScreen } from './screens/Burner';
 import { Home } from './screens/Home';
 import { LogSheet } from './screens/LogSheet';
-import { SettingsScreen } from './screens/Settings';
+
 import { UpdatePill } from './components/UpdatePill';
 import { isUpdateSafePoint, useAppUpdate } from './useAppUpdate';
+
+// Loaded on demand (see lazyScreen.ts): everything but Home, a burner and the log sheet.
+const ReviewScreen = lazyScreen(() => import('./screens/Review'), (m) => m.ReviewScreen);
+const ReelScreen = lazyScreen(() => import('./screens/Reel'), (m) => m.ReelScreen);
+const CloseScreen = lazyScreen(() => import('./screens/Close'), (m) => m.CloseScreen);
+const SetupScreen = lazyScreen(() => import('./screens/Setup'), (m) => m.SetupScreen);
+const ArchiveScreen = lazyScreen(() => import('./screens/Archive'), (m) => m.ArchiveScreen);
+const CheckInScreen = lazyScreen(() => import('./screens/CheckIn'), (m) => m.CheckInScreen);
+const OnboardingScreen = lazyScreen(() => import('./screens/Onboarding'), (m) => m.OnboardingScreen);
+const AboutScreen = lazyScreen(() => import('./screens/About'), (m) => m.AboutScreen);
+const CoachHistoryScreen = lazyScreen(() => import('./screens/CoachHistory'), (m) => m.CoachHistoryScreen);
+const SettingsScreen = lazyScreen(() => import('./screens/Settings'), (m) => m.SettingsScreen);
 
 // The Log button makes its entrance once per launch, with the ignition sequence.
 let logIntro = true;
@@ -100,6 +104,11 @@ function Shell() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [fresh]);
 
+  // Once the first screen is up, fetch the on-demand screens in the background.
+  useEffect(() => {
+    if (state) preloadScreens();
+  }, [!!state]); // eslint-disable-line react-hooks/exhaustive-deps
+
   if (!state) return <div className="h-full bg-black" />;
 
   const isBurner = route.name === 'burner' && (BURNERS as readonly string[]).includes(route.burner);
@@ -157,7 +166,7 @@ function Shell() {
             exit={reduced ? { opacity: 0 } : { opacity: 0, scale: 1.03, filter: 'blur(6px)' }}
             transition={{ duration: 0.25, ease: 'easeOut' }}
           >
-            {screen}
+            <Suspense fallback={<div className="min-h-dvh" aria-busy="true" />}>{screen}</Suspense>
           </motion.main>
         </AnimatePresence>
 

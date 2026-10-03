@@ -6,7 +6,7 @@
   --color-raised: #16161a;
   --color-line: rgb(255 255 255 / 0.09);
   --color-dim: #a8a8b3;
-  --color-faint: #71717a;
+  --color-faint: #8b8b95; /* 4.5:1 or better on every dark surface (WCAG AA); was #71717a */
   --color-ember: #ffae3b;
   --color-family: #ffae3b;
   --color-friends: #ff7aa2;

@@ -15,7 +15,7 @@ A private, offline-first goal tracker built on the Four Burners theory. Installa
 - [x] Phase 7: Notifications (daily and weekly reminders, smart nudges, quiet hours, Web Push from a Supabase schedule)
 - [x] Phase 8: Shortcuts (Siri logging, touchpoints, Apple Health sync, personal tokens)
 - [x] Phase 9: Calendar-aware crunch mode (optional calendar link, travel suggestions, never automatic)
-- [ ] Phase 10: Polish
+- [x] Phase 10: Polish (end-to-end tests, accessibility audit, faster startup, app icon and launch screens)
 
 ## Develop
 
@@ -27,7 +27,28 @@ npm run dev      # http://localhost:5180
 npm test         # domain + data unit tests
 npm run build    # typecheck + production build
 npm run build:functions  # rebundle supabase/functions/* after changing src/server or src/domain
+npm run e2e      # end-to-end tests (Playwright, iPhone 17 Pro Max screen, WebKit)
+npm run icons    # redraw the app icon and launch screens (public/) from scripts/make-icons.mjs
 ```
+
+First time running the end-to-end tests: `npx playwright install webkit chromium` (downloads the test browsers).
+
+## Tests
+
+- **Unit and integration** (`npm test`, Vitest): the domain rules, the data layer and sync, the SQL migrations
+  (real Postgres via PGlite), the Edge Functions and their bundles, and UI copy.
+- **End to end** (`npm run e2e`, Playwright in WebKit, Safari's engine, at the iPhone 17 Pro Max screen size,
+  440 x 956 points at 3x, with Reduce Motion on):
+  - **Log**: two taps from Home, the 5-second undo, a private note, logging from a burner screen.
+  - **Weekly review**: all six steps, resuming on the same step after the app reloads, Copy for Claude (the
+    packet has the week's wins and misses and never a private note), the paste box opening on return, saving
+    the reply, adding a suggested action, sealing the week, and the action showing on Home.
+  - **Quarter close**: the highlights reel, grading, carry forward and drop, the close, next quarter's setup
+    pre-filled with what carried, and the archive.
+  - **Accessibility**: axe (WCAG 2.1 A and AA) on every main screen and the log sheet; any serious or critical
+    problem fails.
+  The test app runs on its own port with no Supabase settings, in a fresh browser profile per test, so it
+  never touches your account or your own data.
 
 To see everything working right away: Settings (gear icon) > Developer > Load sample data. Wipe it from the same place.
 
@@ -45,6 +66,7 @@ src/calendar/ The optional calendar link on this device and its Travel/Crunch su
 src/server/   Server code: the notify (Web Push), shortcuts (Siri, Health) and calendar Edge Functions, each bundled
               with src/domain into supabase/functions/<name> by `npm run build:functions`.
 src/sw.ts     Service worker: the app shell works offline, and it shows notifications.
+e2e/          End-to-end tests (Playwright). scripts/: function bundler, VAPID keys, icon and launch screens.
 src/ui/       React screens and components. Flames live in ui/components/Flame.tsx.
 supabase/migrations/  Versioned SQL for the Supabase database (one new file per change).
 ```

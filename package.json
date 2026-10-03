@@ -11,7 +11,9 @@
     "test:watch": "vitest",
     "typecheck": "tsc -b",
     "build:functions": "node scripts/build-functions.mjs",
-    "vapid": "node scripts/vapid-keys.mjs"
+    "vapid": "node scripts/vapid-keys.mjs",
+    "e2e": "playwright test",
+    "icons": "node scripts/make-icons.mjs"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.109.0",
@@ -22,7 +24,9 @@
     "react-dom": "^19.3.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@electric-sql/pglite": "^0.5.8",
+    "@playwright/test": "^1.63.0",
     "@tailwindcss/vite": "^4.3.3",
     "@types/node": "^20.19.43",
     "@types/react": "^19.3.0",

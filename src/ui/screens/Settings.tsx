@@ -118,6 +118,7 @@ export function SettingsScreen({ state }: { state: AppState }) {
           <Row label="Weekly review day" hint="The review card appears on this day and stays for 3 more.">
             <select
               className="rounded-xl border border-line bg-raised px-3 py-2"
+              aria-label="Weekly review day"
               value={state.settings.reviewDay}
               onChange={(e) => saveSettings({ reviewDay: Number(e.target.value) })}
             >
@@ -164,7 +165,8 @@ export function SettingsScreen({ state }: { state: AppState }) {
         <Row label="Day starts at" hint="Late-night logs before this count toward the day you were living.">
           <select
             className="rounded-xl border border-line bg-raised px-3 py-2"
-            value={state.settings.dayBoundaryHour}
+            aria-label="Day starts at"
+              value={state.settings.dayBoundaryHour}
             onChange={(e) => saveSettings({ dayBoundaryHour: Number(e.target.value) })}
           >
             {[0, 1, 2, 3, 4, 5, 6].map((h) => (
@@ -177,7 +179,8 @@ export function SettingsScreen({ state }: { state: AppState }) {
         <Row label="Grace days per week" hint="Missed days that never break a streak.">
           <select
             className="rounded-xl border border-line bg-raised px-3 py-2"
-            value={state.settings.graceDaysPerWeek}
+            aria-label="Grace days per week"
+              value={state.settings.graceDaysPerWeek}
             onChange={(e) => saveSettings({ graceDaysPerWeek: Number(e.target.value) })}
           >
             {[0, 1, 2, 3].map((n) => (

@@ -120,7 +120,7 @@ export function PersonCard({ s, compact, onEdit }: { s: PersonStatus; compact?: 
           <span
             className="shrink-0 rounded-full px-2.5 py-1 text-[11px] font-bold tracking-wider uppercase"
             style={{
-              color: overdue || s.state === 'due' || s.state === 'never' ? p.core : 'rgba(255,255,255,0.55)',
+              color: overdue || s.state === 'due' || s.state === 'never' ? p.core : 'rgba(255,255,255,0.72)',
               background: overdue || s.state === 'due' ? `${p.outer}33` : 'rgba(255,255,255,0.05)',
             }}
           >

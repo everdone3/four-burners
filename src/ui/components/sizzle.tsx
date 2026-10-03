@@ -271,7 +271,7 @@ export function MiniFlame({ burner, size = 22, lit = 1 }: { burner: import('@/do
 /** Row of step "embers" for guided flows: done steps glow, the current one pulses. */
 export function StepEmbers({ count, current, color = '#ff9a3c' }: { count: number; current: number; color?: string }) {
   return (
-    <div className="flex items-center gap-1.5" aria-label={`Step ${current + 1} of ${count}`}>
+    <div className="flex items-center gap-1.5" role="img" aria-label={`Step ${current + 1} of ${count}`}>
       {Array.from({ length: count }, (_, i) => (
         <motion.span
           key={i}

@@ -20,6 +20,8 @@ export default defineConfig({
       manifest: false, // public/manifest.webmanifest, linked from index.html
       injectManifest: {
         globPatterns: ['**/*.{js,css,html,svg,png,webmanifest}'],
+        // Launch screens and the large manifest icons are fetched by the system itself; keep them out of the offline cache.
+        globIgnores: ['splash/**', 'icon-*.png'],
         maximumFileSizeToCacheInBytes: 3 * 1024 * 1024,
       },
       devOptions: { enabled: false },
