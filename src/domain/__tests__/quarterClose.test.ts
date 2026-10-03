@@ -39,6 +39,12 @@ describe('carry forward', () => {
     expect(c.closeDecision).toBeUndefined();
   });
 
+  it('keeps an Apple Health link, so the evening automation keeps filling it in', () => {
+    const g = goal('steps', { health: { metric: 'steps', min: 9000 } });
+    const c = carryForward(g, { quarterId: '2026-Q4', startDate: '2026-10-01', deadline: '2026-12-31' }, 'new', 'now', 0);
+    expect(c.health).toEqual({ metric: 'steps', min: 9000 });
+  });
+
   it('carries only unfinished milestone steps, with fresh ids', () => {
     const g = goal('trip', {
       type: 'milestone',

@@ -13,7 +13,7 @@ A private, offline-first goal tracker built on the Four Burners theory. Installa
 - [x] Phase 5: Sync (email-code sign-in, offline-first sync, JSON backups, offline app shell)
 - [x] Phase 6: Security (Face ID lock with a passkey, idle re-lock, blur when leaving the app)
 - [x] Phase 7: Notifications (daily and weekly reminders, smart nudges, quiet hours, Web Push from a Supabase schedule)
-- [ ] Phase 8: Shortcuts
+- [x] Phase 8: Shortcuts (Siri logging, touchpoints, Apple Health sync, personal tokens)
 - [ ] Phase 9: Calendar-aware crunch mode
 - [ ] Phase 10: Polish
 
@@ -26,7 +26,7 @@ npm install
 npm run dev      # http://localhost:5180
 npm test         # domain + data unit tests
 npm run build    # typecheck + production build
-npm run build:functions  # rebundle supabase/functions/notify after changing src/server or src/domain
+npm run build:functions  # rebundle supabase/functions/* after changing src/server or src/domain
 ```
 
 To see everything working right away: Settings (gear icon) > Developer > Load sample data. Wipe it from the same place.
@@ -40,8 +40,9 @@ src/domain/   Pure TypeScript rules: scoring, intents, High cap, goals, proratio
 src/data/     Dexie (IndexedDB) storage, repository writes, live queries, sample data, backups.
 src/sync/     Sync engine (last write wins), Supabase client, email-code auth, sync scheduler.
 src/notify/   This device's push subscription (turn on/off, time zone refresh, test) and push payloads.
-src/server/   Server code: the notify Edge Function (Web Push, VAPID), bundled with src/domain into
-              supabase/functions/notify by `npm run build:functions`.
+src/shortcuts/ Personal tokens (made on the device, only the hash is stored), recipes for the Shortcuts.
+src/server/   Server code: the notify (Web Push) and shortcuts (Siri, Health) Edge Functions, each bundled
+              with src/domain into supabase/functions/<name> by `npm run build:functions`.
 src/sw.ts     Service worker: the app shell works offline, and it shows notifications.
 src/ui/       React screens and components. Flames live in ui/components/Flame.tsx.
 supabase/migrations/  Versioned SQL for the Supabase database (one new file per change).
@@ -166,6 +167,54 @@ test fails while the bundle is out of date).
   again.
 - Pause all notifications: `select cron.unschedule('four-burners-notify');` (run the schedule migration again
   to resume).
+
+## Shortcuts and Siri
+
+Log by voice ("Hey Siri, log date night"), log a call or a coffee with someone, and send Apple Health numbers
+(steps, workouts, exercise minutes, sleep) every evening to linked Health goals. A web app can't install
+Shortcuts, so you build them once on your iPhone; Settings > Shortcuts and Siri has step-by-step recipes.
+
+How it works: each Shortcut calls the `shortcuts` Edge Function with a personal token. The function finds the
+goal or person by name (any part of the name works; it says so when a name could mean two things), writes the
+log or touchpoint straight into your synced records, and answers with a short sentence Siri reads out ("Logged
+"Date night". 3 of 6 so far."). Your devices pull the entry on their next sync, tagged "via Siri" or "from Apple
+Health". Each Shortcut sends the phone's own time, so an entry lands on the day you are living wherever you are.
+
+- **Tokens**: Settings > Shortcuts and Siri > Make a token. It is shown once: copy it into your Shortcuts. Only
+  its SHA-256 hash is stored on the server, so a lost token is replaced, not recovered. Revoke stops every
+  Shortcut using it at once. Up to 10 tokens.
+- **Health goals**: in the same section, link a Health goal (Number, Habit or Yes/No) to Steps, Workouts,
+  Exercise minutes or Sleep. Number goals add each day's amount; Habit and Yes/No goals count a day that
+  reaches the minimum you set. Each goal gets one Health log per day, so sending again the same day replaces
+  that day's number instead of adding a second. Edit or delete a Health log in the app and your change stays
+  (once it has synced; a change made offline can be replaced by that evening's send). A Habit day you already
+  logged by hand is not counted twice. A carried-forward goal keeps its link.
+- Milestone goals can't be logged by voice (check off the next step in the app).
+
+The request every Shortcut makes: **Get Contents of URL**, Method POST, header `Authorization: Bearer <token>`,
+Request Body JSON:
+
+| action | fields | does |
+| --- | --- | --- |
+| `log` | `goal`, `value` (Number goals), `note`, `at` | logs progress on a goal |
+| `touch` | `person`, `type` (call, text, in person, other), `note`, `at` | logs a touchpoint |
+| `health` | `date` (yyyy-MM-dd), `at`, `steps`, `workouts`, `activeMinutes`, `sleepHours` (or `sleepMinutes`, `sleepSeconds`) | one day of Health numbers |
+| `goals`, `people` | | names for "Choose from List" (in `items`) |
+| `ping` | | checks the connection |
+
+`at` is Current Date with Date Format ISO 8601 (include time). Every answer is JSON with `message` (what Siri
+says) and `ok`.
+
+### One-time setup
+
+1. **Table.** SQL Editor > New query > paste `supabase/migrations/20261003120000_shortcuts.sql` > Run.
+2. **The function.** Edge Functions > Deploy a new function > Via Editor. Name it exactly `shortcuts`, replace
+   the sample code with the whole of `supabase/functions/shortcuts/index.ts`, Deploy. Then turn **off** JWT
+   verification in its settings (Shortcuts send a personal token, not a sign-in). No secrets to add.
+3. **Your iPhone.** Settings > Shortcuts and Siri > Make a token, then follow the recipes. Start with a "ping"
+   Shortcut (fields: action = ping) to check the address and token.
+
+With the CLI: `npx supabase functions deploy shortcuts` (`supabase/config.toml` turns JWT verification off).
 
 ## Backups
 

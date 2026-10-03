@@ -105,7 +105,21 @@ export interface Goal extends BaseRecord {
   /** The goal this was carried forward from, and the goal it was carried into. */
   carriedFromId?: string;
   carriedToId?: string;
+  /** Health goals only: filled in daily from Apple Health by a Shortcut (src/domain/shortcuts.ts). */
+  health?: HealthLink;
 }
+
+/** Apple Health numbers a daily Shortcut can send. */
+export type HealthMetric = 'steps' | 'workouts' | 'activeMinutes' | 'sleepHours';
+
+export interface HealthLink {
+  metric: HealthMetric;
+  /** Habit and Yes/No goals: a day counts when the metric reaches this. Number goals add the day's amount. */
+  min?: number;
+}
+
+/** Where an entry came from when it was not tapped in the app. */
+export type EntrySource = 'shortcut' | 'health';
 
 export interface LogEdit {
   at: Instant;
@@ -121,6 +135,9 @@ export interface LogEntry extends BaseRecord, Stamp {
   note?: string;
   notePrivate?: boolean;
   edits?: LogEdit[];
+  source?: EntrySource;
+  /** Health logs only: the updatedAt of the copy the server wrote. Once a device edits it, they differ. */
+  healthWrittenAt?: Instant;
 }
 
 export interface EnergyEntry extends BaseRecord, Stamp {
@@ -143,6 +160,7 @@ export interface Touchpoint extends BaseRecord, Stamp {
   type: TouchpointType;
   note?: string;
   notePrivate?: boolean;
+  source?: EntrySource;
 }
 
 export interface CrunchPeriod extends BaseRecord {

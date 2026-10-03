@@ -62,6 +62,7 @@ export function carryForward(
     habitPeriod: goal.habitPeriod,
     milestones: steps?.map((m, i) => ({ id: `${id}-s${i}`, title: m.title })),
     personIds: goal.personIds,
+    health: goal.health,
     startDate: next.startDate,
     deadline: next.deadline,
     order,

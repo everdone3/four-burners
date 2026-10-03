@@ -12,3 +12,4 @@ export * from './logs';
 export * from './reviews';
 export * from './quarterClose';
 export * from './notify';
+export * from './shortcuts';

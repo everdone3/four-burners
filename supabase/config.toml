@@ -3,3 +3,7 @@
 [functions.notify]
 # The pg_cron schedule calls without a user token; the function checks its own secret (see handler.ts).
 verify_jwt = false
+
+[functions.shortcuts]
+# Shortcuts send a personal token, not a sign-in; the function checks the token itself (see handler.ts).
+verify_jwt = false

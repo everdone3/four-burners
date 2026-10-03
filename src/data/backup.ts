@@ -23,7 +23,7 @@
 // - Reminder: due when now >= max(lastBackupAt, reminderStart) + 30 days and now >= snoozedUntil.
 //   reminderStart is set to now the first time the reminder is checked on a device (so a brand-new
 //   install is not nagged on day one). Snooze pushes it 7 days.
-import { BURNERS, INTENTS } from '@/domain';
+import { BURNERS, HEALTH_METRIC_IDS, INTENTS, parseTime } from '@/domain';
 import { isLocalOnly, loadSampleQuarterIds } from '@/sync/localOnly';
 import { LOCAL_ONLY_FIELDS, SEED_UPDATED_AT, SYNCED_COLLECTIONS, primaryKeyOf, type Collection } from '@/sync/types';
 import { db } from './db';
@@ -106,6 +106,11 @@ const STAMP: Record<string, Check> = { at: instant, offsetMin: inRange(-1440, 14
 const TRAVEL = oneOf('rare', 'monthly', 'weekly', 'mostly_away', null);
 const PROFILE_FIELDS: Record<string, Check> = { lifeContext: str, burners: perBurner(shape({ matters: str, winning: str })), crunch: str };
 const profileFields = shape(PROFILE_FIELDS, { travel: TRAVEL });
+const hhmm: Check = (v) => parseTime(v) !== null;
+const reminder = shape({ on: bool, time: hhmm });
+const NOTIFY = shape({ daily: reminder, weekly: reminder, nudges: bool, quiet: shape({ on: bool, start: hhmm, end: hhmm }) });
+const HEALTH_LINK = shape({ metric: oneOf(...HEALTH_METRIC_IDS) }, { min: inRange(0, 1e6) });
+const SOURCE = oneOf('shortcut', 'health');
 
 /** Values of the kv keys that sync. Other kv keys are device-local and skipped on import. */
 const KV_VALUES = new Map<string, Check>([
@@ -118,6 +123,7 @@ const KV_VALUES = new Map<string, Check>([
       soundEffects: bool,
       haptics: bool,
       sensitiveTerms: listOf(str),
+      notify: NOTIFY,
     }),
   ],
   ['onboarding', shape({}, { step: num, draft: profileFields, quarterId, completedAt: instant, dismissedAt: instant, snapshotted: bool, resumeHidden: bool })],
@@ -143,15 +149,16 @@ const RECORD_SHAPES: Record<Collection, Check> = {
       closeDecision: oneOf('carry', 'modify', 'drop'),
       carriedFromId: str,
       carriedToId: str,
+      health: HEALTH_LINK,
     },
   ),
   logs: shape(
     { goalId: str, value: num, ...STAMP },
-    { ...BASE, milestoneId: str, note: str, notePrivate: bool, edits: listOf(shape({ at: instant, prevValue: num }, { prevNote: str })) },
+    { ...BASE, milestoneId: str, note: str, notePrivate: bool, edits: listOf(shape({ at: instant, prevValue: num }, { prevNote: str })), source: SOURCE, healthWrittenAt: instant },
   ),
   energy: shape({ rating: oneOf(1, 2, 3, 4, 5), ...STAMP }, BASE),
   people: shape({ name: str, burner: oneOf('family', 'friends'), cadenceDays: num, order: num }, BASE),
-  touchpoints: shape({ personId: str, type: oneOf('call', 'text', 'in_person', 'other'), ...STAMP }, { ...BASE, note: str, notePrivate: bool }),
+  touchpoints: shape({ personId: str, type: oneOf('call', 'text', 'in_person', 'other'), ...STAMP }, { ...BASE, note: str, notePrivate: bool, source: SOURCE }),
   crunch: shape({ start: localDate }, { ...BASE, end: localDate, label: str }),
   reviews: shape(
     { weekStart: localDate, step: num, wins: listOf(str), misses: listOf(str), focus: str, focusBurners: listOf(burner) },

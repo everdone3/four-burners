@@ -20,6 +20,7 @@ import {
 } from '@/domain';
 import type { NotifyStore, SubscriptionRow } from './store';
 import { importVapidKey, sendWebPush, type VapidKeys } from './webpush';
+import { serviceKeyFrom } from '../env';
 
 export interface HandlerDeps {
   store: NotifyStore;
@@ -166,19 +167,7 @@ export function readConfig(env: (name: string) => string | undefined):
   | { ok: true; supabaseUrl: string; serviceKey: string; vapid: VapidKeys }
   | { ok: false; missing: string[] } {
   const supabaseUrl = env('SUPABASE_URL');
-  // Prefer a secret key (sb_secret_..., injected as JSON {"default": ...} on newer projects): it keeps working
-  // after the legacy JWT keys are disabled. Fall back to the legacy service role JWT.
-  let serviceKey = env('NOTIFY_SERVICE_KEY');
-  if (!serviceKey) {
-    try {
-      const keys = JSON.parse(env('SUPABASE_SECRET_KEYS') ?? '{}') as Record<string, unknown>;
-      const k = keys.default ?? Object.values(keys)[0];
-      if (typeof k === 'string' && k) serviceKey = k;
-    } catch {
-      // not JSON: try the legacy key
-    }
-  }
-  serviceKey ||= env('SUPABASE_SERVICE_ROLE_KEY');
+  const serviceKey = serviceKeyFrom(env, 'NOTIFY_SERVICE_KEY');
   const publicKey = env('VAPID_PUBLIC_KEY');
   const privateKey = env('VAPID_PRIVATE_KEY');
   const subject = env('VAPID_SUBJECT');

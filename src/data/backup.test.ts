@@ -431,6 +431,11 @@ describe('importBackup record shapes', () => {
       ['a __proto__ key', { goals: [{ ...goal('g9', T3), ['__proto__']: { polluted: true } }] }],
       ['a nested constructor key', { goals: [goal('g9', T3, { milestones: [{ id: 'm', title: 't', constructor: { polluted: true } }] })] }],
       ['a prototype key in settings', settings({ prototype: { polluted: true } })],
+      ['notifications with a bad time', settings({ notify: { daily: { on: true, time: '25:00' }, weekly: { on: true, time: '17:00' }, nudges: true, quiet: { on: true, start: '22:00', end: '07:00' } } })],
+      ['notifications missing quiet hours', settings({ notify: { daily: { on: true, time: '20:00' }, weekly: { on: true, time: '17:00' }, nudges: true } })],
+      ['goal linked to an unknown Health metric', { goals: [goal('g9', T3, { health: { metric: 'heartRate' } })] }],
+      ['goal Health minimum as text', { goals: [goal('g9', T3, { health: { metric: 'steps', min: 'lots' } })] }],
+      ['log from an unknown source', { logs: [log('l9', 'g1', T3, { source: 'fax' })] }],
       ['absurd nesting', { goals: [goal('g9', T3, { extra: JSON.parse('['.repeat(40) + ']'.repeat(40)) })] }],
     ];
     for (const [label, tables] of bad) {
@@ -447,6 +452,17 @@ describe('importBackup record shapes', () => {
     expect(({} as Row).polluted).toBeUndefined();
     // The last good version of these records still imports.
     expect(await importBackup(file({ goals: [goal('g9', T3)], kv: [{ key: 'settings', value: { dayBoundaryHour: 4 }, updatedAt: T3 }] }))).toEqual({ added: 1, updated: 1, skipped: 0 });
+    // Phase 7 and 8 fields in their real shapes import too.
+    const notify = { daily: { on: true, time: '20:00' }, weekly: { on: false, time: '17:00' }, nudges: true, quiet: { on: true, start: '22:00', end: '07:00' } };
+    expect(
+      await importBackup(
+        file({
+          goals: [goal('g10', T3, { burner: 'health', health: { metric: 'steps', min: 8000 } })],
+          logs: [log('l10', 'g10', T3, { source: 'health' })],
+          kv: [{ key: 'settings', value: { dayBoundaryHour: 4, notify }, updatedAt: '2026-09-30T00:00:00.000Z' }],
+        }),
+      ),
+    ).toMatchObject({ added: 2 });
   });
 });
 
